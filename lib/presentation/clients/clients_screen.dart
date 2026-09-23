@@ -156,13 +156,26 @@ class ClientsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const Row(
-                children: [
-                  Icon(Icons.check_circle, size: 14, color: AppConstants.accentGreen),
-                  SizedBox(width: 4),
-                  Text('Actif', style: TextStyle(color: AppConstants.accentGreen, fontSize: 12)),
-                ],
-              ),
+              client.totalDue > 0
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3A1A1A),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF5A2A2A)),
+                      ),
+                      child: Text(
+                        '🔴 Impayé : ${client.totalDue.toStringAsFixed(0)} DA',
+                        style: const TextStyle(color: AppConstants.alertRed, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  : const Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 14, color: AppConstants.accentGreen),
+                        SizedBox(width: 4),
+                        Text('À jour', style: TextStyle(color: AppConstants.accentGreen, fontSize: 12)),
+                      ],
+                    ),
             ],
           ),
         ],

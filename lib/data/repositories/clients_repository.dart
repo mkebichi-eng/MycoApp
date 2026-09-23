@@ -33,6 +33,7 @@ class ClientsRepository {
         address: '8 Boulevard Colonel Amirouche',
         city: 'Alger',
         presetPricePerKg: 1100.0, // 1 100 DA/kg
+        totalDue: 5500.0, // 5 500 DA impayé
         notes: 'Préfère les petits chapeaux fermes pour pizzas.',
         createdAt: now.subtract(const Duration(days: 45)),
       ),

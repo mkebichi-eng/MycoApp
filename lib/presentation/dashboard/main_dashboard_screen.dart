@@ -25,13 +25,17 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
     final financial = ref.watch(financialMetricsProvider);
     final production = ref.watch(productionStatsProvider);
     final alerts = ref.watch(lowStockAlertsProvider);
+    final clients = ref.watch(clientsStreamProvider).value ?? [];
+    final clientsWithDue = clients.where((c) => c.totalDue > 0).toList();
 
     final totalRev = financial['totalRevenue'] as double? ?? 35950.0;
     final totalFee = financial['totalDeliveryFees'] as double? ?? 1350.0;
     final totalExp = 7125.0; // Achats intrants et paille
     final netProfit = totalRev - totalFee - totalExp;
-    final totalPaid = 30450.0;
-    final totalDue = totalRev - totalPaid;
+    final totalDue = clientsWithDue.isNotEmpty
+        ? clientsWithDue.fold<double>(0.0, (sum, c) => sum + c.totalDue)
+        : (totalRev > 30000 ? 5500.0 : 0.0);
+    final totalPaid = totalRev - totalDue;
 
     return Scaffold(
       backgroundColor: AppConstants.backgroundDark,
@@ -197,9 +201,44 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Section Alertes (Style MycoTrack exact)
-          if (alerts.isNotEmpty) ...[
-            _buildSectionHeader('⚠️ ALERTES'),
+          // Section Alertes (Style MycoTrack exact : Stock & Impayés)
+          if (alerts.isNotEmpty || clientsWithDue.isNotEmpty) ...[
+            _buildSectionHeader('⚠️ ALERTES & CRÉDITS EN COURS'),
+            ...clientsWithDue.map((client) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A1A1A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF5A2A2A)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '🔴 Impayé : ${client.name}',
+                              style: const TextStyle(color: AppConstants.alertYellow, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Reste à régler : ${MycoCalculations.formatCurrency(client.totalDue)}',
+                              style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.phone, color: AppConstants.accentGreen, size: 20),
+                        tooltip: 'Relancer client',
+                        onPressed: () => CallService.callClient(client.phone),
+                      ),
+                    ],
+                  ),
+                )),
             ...alerts.map((item) => Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),

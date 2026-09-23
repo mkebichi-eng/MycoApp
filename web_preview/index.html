@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>MycoTrack — Gestion Mycicole Complète</title>
+  <title>MycoTrack — Gestion Ventes, Livraisons & Finances</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     body {
@@ -32,9 +32,9 @@
       <div>
         <h1 class="text-sm font-bold text-white flex items-center gap-1.5">
           <span>MycoTrack</span>
-          <span class="text-[9px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-1.5 py-0.5 rounded-full font-mono">v1.2 CRUD</span>
+          <span class="text-[9px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-1.5 py-0.5 rounded-full font-mono">FINANCES & COURSES</span>
         </h1>
-        <p class="text-[10px] text-[#888]">Ferme de Pleurotes • Thème Dark Forest</p>
+        <p class="text-[10px] text-[#888]">Gestion Ventes • Dispatch Livreur • Décompte Caisse</p>
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -47,20 +47,21 @@
   <!-- Main Mobile App Shell (Full screen on phone, Mockup on desktop) -->
   <div class="w-full max-w-md bg-[#0f1a0f] min-h-screen sm:min-h-0 sm:h-[840px] sm:rounded-[36px] sm:shadow-2xl sm:border-8 sm:border-slate-900 overflow-hidden flex flex-col relative">
 
-    <!-- Top Status / Notch on mobile desktop view -->
-    <div class="bg-[#0f1a0f] px-4 pt-2 pb-1 flex items-center justify-between border-b border-[#2d4a2d]/50 select-none">
+    <!-- Top Status / Header on phone view -->
+    <div class="bg-[#0f1a0f] px-4 pt-2.5 pb-2 flex items-center justify-between border-b border-[#2d4a2d]/50 select-none">
       <div class="flex items-center gap-2">
-        <span class="text-lg">🍄</span>
-        <span class="font-bold text-sm tracking-wide text-white">MycoTrack</span>
+        <span class="text-xl">🍄</span>
+        <span class="font-bold text-base tracking-wide text-white">MycoTrack</span>
       </div>
       
-      <!-- Role Switcher Pill -->
-      <div class="flex items-center bg-[#1a2a1a] p-1 rounded-xl border border-[#2d4a2d]">
+      <!-- Role Switcher Pill with dynamic badge -->
+      <div class="flex items-center bg-[#1a2a1a] p-1 rounded-xl border border-[#2d4a2d] relative">
         <button onclick="setRole('admin')" id="role-admin-btn" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow">
           👑 Admin
         </button>
-        <button onclick="setRole('delivery')" id="role-delivery-btn" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          🛵 Livreur
+        <button onclick="setRole('delivery')" id="role-delivery-btn" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all relative flex items-center gap-1">
+          <span>🛵 Livreur</span>
+          <span id="role-delivery-badge" class="hidden w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
         </button>
       </div>
     </div>
@@ -72,9 +73,9 @@
         <span id="role-status-text" class="text-[11px] text-[#7bc67e] font-semibold">Mode Propriétaire & Responsable</span>
       </div>
       <div class="flex items-center gap-2">
-        <span id="live-clock" class="text-[10px] text-[#888] font-mono">14:40</span>
+        <span id="live-clock" class="text-[10px] text-[#888] font-mono">14:55</span>
         <button onclick="openScanModal()" class="text-xs bg-[#1a2a1a] border border-[#2d4a2d] px-2 py-0.5 rounded text-[#7bc67e] font-bold">
-          📷 Scan QR
+          📷 QR
         </button>
       </div>
     </div>
@@ -84,28 +85,33 @@
       <!-- Content rendered by Javascript -->
     </main>
 
-    <!-- Bottom Navigation Bar (Hidden in Delivery Mode) -->
-    <nav id="bottom-nav" class="bg-[#1a2a1a] border-t border-[#2d4a2d] px-2 py-2 flex justify-around text-center select-none pb-4 sm:pb-2">
+    <!-- Bottom Navigation Bar (6 modules) -->
+    <nav id="bottom-nav" class="bg-[#1a2a1a] border-t border-[#2d4a2d] px-1 py-1.5 flex justify-around text-center select-none pb-4 sm:pb-1.5">
       <button onclick="switchTab('dashboard')" id="nav-dash" class="flex flex-col items-center text-[#7bc67e] font-bold p-1">
         <span class="text-lg">🏠</span>
-        <span class="text-[10px] mt-0.5">Accueil</span>
+        <span class="text-[9px] mt-0.5">Accueil</span>
+      </button>
+      <button onclick="switchTab('sales')" id="nav-sales" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
+        <span class="text-lg">🛒</span>
+        <span class="text-[9px] mt-0.5">Ventes</span>
+        <span id="active-sales-badge" class="hidden absolute top-0.5 right-1 px-1 bg-amber-500 text-black text-[8px] font-bold rounded-full">1</span>
       </button>
       <button onclick="switchTab('clients')" id="nav-clients" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
         <span class="text-lg">👤</span>
-        <span class="text-[10px] mt-0.5">Clients</span>
+        <span class="text-[9px] mt-0.5">Clients</span>
       </button>
       <button onclick="switchTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
         <span class="text-lg">📦</span>
-        <span class="text-[10px] mt-0.5">Stock</span>
-        <span id="stock-alert-dot" class="hidden absolute top-0 right-2 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+        <span class="text-[9px] mt-0.5">Stock</span>
+        <span id="stock-alert-dot" class="hidden absolute top-1 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
       </button>
       <button onclick="switchTab('bags')" id="nav-bags" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
         <span class="text-lg">🍄</span>
-        <span class="text-[10px] mt-0.5">Sacs/Lots</span>
+        <span class="text-[9px] mt-0.5">Lots/Sacs</span>
       </button>
       <button onclick="switchTab('expenses')" id="nav-exp" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
         <span class="text-lg">💸</span>
-        <span class="text-[10px] mt-0.5">Dépenses</span>
+        <span class="text-[9px] mt-0.5">Dépenses</span>
       </button>
     </nav>
   </div>
@@ -126,46 +132,113 @@
     let currentRole = 'admin';
     let currentTab = 'dashboard';
 
+    // Livreurs disponibles avec leurs tarifs de course
+    const deliverersList = [
+      { id: 'deliv_karim', name: 'Karim Meziani (Moto rapide)', phone: '+213551001122', fee: 350 },
+      { id: 'deliv_yacine', name: 'Yacine Dahmani (Kangoo / Gros volume)', phone: '+213662223344', fee: 500 },
+      { id: 'deliv_amine', name: 'Amine Benali (Scooter urbain)', phone: '+213773334455', fee: 300 }
+    ];
+
     const initialSeedState = {
       clients: [
         { id: 'cli_01', name: "Restaurant Le Cèdre Bleu", contact: "Chef Youssef", phone: "+213550112233", address: "14 Rue Didouche Mourad", city: "Alger", price: 1200, due: 0, type: "Restaurant" },
         { id: 'cli_02', name: "Pizzeria Bella Vista", contact: "Sofiane", phone: "+213661445566", address: "8 Boulevard Colonel Amirouche", city: "Alger", price: 1100, due: 5500, type: "Pizzeria" },
         { id: 'cli_03', name: "Supermarché Bio Oasis", contact: "Mme Meriem", phone: "+213770778899", address: "Centre Commercial El Qods, Chéraga", city: "Chéraga", price: 1350, due: 0, type: "Supermarché" }
       ],
+      deliveries: [
+        {
+          id: 'vte_001',
+          orderNumber: 'VTE-2026-001',
+          clientId: 'cli_01',
+          clientName: 'Restaurant Le Cèdre Bleu',
+          clientPhone: '+213550112233',
+          clientAddress: '14 Rue Didouche Mourad, Alger',
+          quantityKg: 8.5,
+          pricePerKg: 1200,
+          totalAmount: 10200, // 8.5 * 1200
+          delivererId: 'deliv_karim',
+          delivererName: 'Karim Meziani (Moto)',
+          deliveryFee: 350,
+          status: 'settled', // Clôturée
+          isClientPaid: true,
+          amountCollected: 10200,
+          clientRemainingDue: 0,
+          delivererFeeDeducted: 350,
+          netCashToFarm: 9850, // 10200 - 350
+          createdAt: '22 Sep 10:30'
+        },
+        {
+          id: 'vte_002',
+          orderNumber: 'VTE-2026-002',
+          clientId: 'cli_02',
+          clientName: 'Pizzeria Bella Vista',
+          clientPhone: '+213661445566',
+          clientAddress: '8 Boulevard Colonel Amirouche, Alger',
+          quantityKg: 10.0,
+          pricePerKg: 1100,
+          totalAmount: 11000,
+          delivererId: 'deliv_yacine',
+          delivererName: 'Yacine Dahmani (Kangoo)',
+          deliveryFee: 500,
+          status: 'settled',
+          isClientPaid: false,
+          amountCollected: 5500, // Acompte de 5 500 DA versé
+          clientRemainingDue: 5500, // 5 500 DA restent dus !
+          delivererFeeDeducted: 500,
+          netCashToFarm: 5000, // 5500 - 500
+          createdAt: '22 Sep 14:00'
+        },
+        {
+          id: 'vte_003',
+          orderNumber: 'VTE-2026-003',
+          clientId: 'cli_03',
+          clientName: 'Supermarché Bio Oasis',
+          clientPhone: '+213770778899',
+          clientAddress: 'Centre Commercial El Qods, Chéraga',
+          quantityKg: 15.0,
+          pricePerKg: 1350,
+          totalAmount: 20250,
+          delivererId: 'deliv_karim',
+          delivererName: 'Karim Meziani (Moto)',
+          deliveryFee: 400,
+          status: 'pending_acceptance', // Nouvelle course en attente d'acceptation par le livreur !
+          isClientPaid: false,
+          amountCollected: 0,
+          clientRemainingDue: 20250,
+          delivererFeeDeducted: 0,
+          netCashToFarm: 0,
+          createdAt: '23 Sep 11:15'
+        }
+      ],
       stocks: [
         { id: 'stk_01', name: "Paille de blé hachée", category: "Matière première", quantity: 180, unit: "kg", threshold: 50, cost: 35 },
         { id: 'stk_02', name: "Blanc de Pleurote HK35 (Seigle)", category: "Semence/Blanc", quantity: 14, unit: "kg", threshold: 10, cost: 650 },
-        { id: 'stk_03', name: "Sacs de culture micro-perforés", category: "Consommable", quantity: 45, unit: "unités", threshold: 50, cost: 25 }, // ALERTE CRITIQUE !
+        { id: 'stk_03', name: "Sacs de culture micro-perforés", category: "Consommable", quantity: 45, unit: "unités", threshold: 50, cost: 25 },
         { id: 'stk_04', name: "Alcool à 70° désinfection", category: "Sanitation", quantity: 12, unit: "L", threshold: 5, cost: 450 },
-        { id: 'stk_05', name: "Produit décontamination sol", category: "Sanitation", quantity: 3.5, unit: "L", threshold: 4.0, cost: 1200 } // ALERTE CRITIQUE !
+        { id: 'stk_05', name: "Produit décontamination sol", category: "Sanitation", quantity: 3.5, unit: "L", threshold: 4.0, cost: 1200 }
       ],
       batches: [
         { id: 'LOT-2026-09-01', strain: 'Pleurote Gris HK35', substrate: 'Paille hachée (Fût 200L)', strawDry: 50, strawWet: 160, spawnKg: 7, bagCount: 32, date: '2026-09-01', status: 'Actif' }
       ],
       bags: [
-        { id: 'BAG-2026-001', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.45, room: 'Chambre 1' },
-        { id: 'BAG-2026-002', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.20, room: 'Chambre 1' },
-        { id: 'BAG-2026-003', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, room: 'Incubation A' },
-        { id: 'BAG-2026-004', batchId: 'LOT-2026-09-01', status: 'contaminated', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, reason: 'Trichoderma (Moisissure verte)' },
-        { id: 'BAG-2026-005', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, room: 'Incubation A' }
+        { id: 'BAG-2026-001', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.45 },
+        { id: 'BAG-2026-002', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.20 },
+        { id: 'BAG-2026-003', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0 },
+        { id: 'BAG-2026-004', batchId: 'LOT-2026-09-01', status: 'contaminated', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0 },
+        { id: 'BAG-2026-005', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0 }
       ],
       expenses: [
         { id: 'exp_01', label: "Achat paille de blé (300 kg)", amount: 4500, category: "Matière première", date: "15 Sep" },
         { id: 'exp_02', label: "Alcool 70° & désinfectant chaux", amount: 2625, category: "Sanitation", date: "18 Sep" },
         { id: 'exp_03', label: "Carburant livraison Alger Centre", amount: 1200, category: "Transport", date: "21 Sep" }
-      ],
-      deliveries: [
-        { id: 'deliv_1', num: 'LIV-001', clientName: 'Restaurant Le Cèdre Bleu', phone: '+213550112233', address: '14 Rue Didouche Mourad, Alger', qty: 8.5, price: 1200, fee: 400, status: 'confirmed' },
-        { id: 'deliv_2', num: 'LIV-002', clientName: 'Pizzeria Bella Vista', phone: '+213661445566', address: '8 Boulevard Colonel Amirouche, Alger', qty: 5.0, price: 1100, fee: 350, status: 'pending' },
-        { id: 'deliv_3', num: 'LIV-003', clientName: 'Supermarché Bio Oasis', phone: '+213770778899', address: 'Centre Commercial El Qods, Chéraga', qty: 15.0, price: 1350, fee: 600, status: 'confirmed' }
       ]
     };
 
-    let state = JSON.parse(localStorage.getItem('mycotrack_state_v2') || 'null') || initialSeedState;
+    let state = JSON.parse(localStorage.getItem('mycotrack_state_v3') || 'null') || initialSeedState;
 
     function saveState() {
-      localStorage.setItem('mycotrack_state_v2', JSON.stringify(state));
-      checkAlerts();
+      localStorage.setItem('mycotrack_state_v3', JSON.stringify(state));
+      checkBadges();
       renderCurrentView();
     }
 
@@ -188,12 +261,33 @@
       }, 2400);
     }
 
-    function checkAlerts() {
+    function checkBadges() {
+      // Badge alerte stock
       const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
       const dot = document.getElementById('stock-alert-dot');
       if (dot) {
         if (lowCount > 0) dot.classList.remove('hidden');
         else dot.classList.add('hidden');
+      }
+
+      // Badge courses livreur en attente
+      const pendingDeliveries = state.deliveries.filter(d => d.status === 'pending_acceptance' || d.status === 'in_delivery').length;
+      const delivBadge = document.getElementById('role-delivery-badge');
+      if (delivBadge) {
+        if (pendingDeliveries > 0) delivBadge.classList.remove('hidden');
+        else delivBadge.classList.add('hidden');
+      }
+
+      // Badge onglet ventes
+      const activeSales = state.deliveries.filter(d => d.status !== 'settled').length;
+      const salesBadge = document.getElementById('active-sales-badge');
+      if (salesBadge) {
+        if (activeSales > 0) {
+          salesBadge.innerText = activeSales;
+          salesBadge.classList.remove('hidden');
+        } else {
+          salesBadge.classList.add('hidden');
+        }
       }
     }
 
@@ -223,10 +317,11 @@
 
     function switchTab(tab) {
       currentTab = tab;
-      ['dash', 'clients', 'stock', 'bags', 'exp'].forEach(t => {
+      ['dash', 'sales', 'clients', 'stock', 'bags', 'exp'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (el) {
           if ((tab === 'dashboard' && t === 'dash') || 
+              (tab === 'sales' && t === 'sales') || 
               (tab === 'clients' && t === 'clients') || 
               (tab === 'stock' && t === 'stock') || 
               (tab === 'bags' && t === 'bags') || 
@@ -245,6 +340,7 @@
         renderDeliveryView();
       } else {
         if (currentTab === 'dashboard') renderDashboardView();
+        else if (currentTab === 'sales') renderSalesView();
         else if (currentTab === 'clients') renderClientsView();
         else if (currentTab === 'stock') renderStockView();
         else if (currentTab === 'bags') renderBagsView();
@@ -253,135 +349,663 @@
     }
 
     // ==========================================
-    // 1. DASHBOARD PRINCIPAL
+    // 1. DASHBOARD PRINCIPAL (FINANCES COMPLÈTES)
     // ==========================================
     function renderDashboardView() {
       const container = document.getElementById('app-content');
-      const totalRevenue = state.deliveries.reduce((sum, d) => sum + (d.qty * d.price), 0);
-      const totalDelivererFees = state.deliveries.reduce((sum, d) => sum + d.fee, 0);
-      const totalExpenses = state.expenses.reduce((sum, e) => sum + e.amount, 0);
+      
+      // Calculs financiers rigoureux
+      // 1. Chiffre d'Affaires Brut (Total des ventes passées)
+      const totalRevenue = state.deliveries.reduce((sum, d) => sum + (d.totalAmount || 0), 0);
+      
+      // 2. Frais livreurs déduits
+      const totalDelivererFees = state.deliveries.reduce((sum, d) => sum + (d.deliveryFee || 0), 0);
+      
+      // 3. Montant réel encaissé en caisse ferme (Net versé en caisse)
+      const totalNetCashInFarm = state.deliveries.reduce((sum, d) => sum + (d.netCashToFarm || 0), 0);
+      
+      // 4. Impayés / Restes à payer des clients
+      const totalRemainingDue = state.clients.reduce((sum, c) => sum + (c.due || 0), 0);
+      
+      // 5. Total des dépenses d'exploitation
+      const totalExpenses = state.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      
+      // 6. Bénéfice Net Réel = Chiffre d'affaires - Frais livreurs - Dépenses
       const netProfit = totalRevenue - totalDelivererFees - totalExpenses;
-      const totalDue = state.clients.reduce((sum, c) => sum + (c.due || 0), 0);
-      const totalCollected = totalRevenue - totalDue;
+      const profitRate = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
 
+      // Alertes
       const lowStocks = state.stocks.filter(s => s.quantity <= s.threshold);
-      const activeIncub = state.bags.filter(b => b.status === 'incubation').length;
-      const activeFruit = state.bags.filter(b => b.status === 'fruiting').length;
-      const activeContam = state.bags.filter(b => b.status === 'contaminated').length;
+      const pendingDeliveries = state.deliveries.filter(d => d.status !== 'settled');
 
       container.innerHTML = `
         <div class="flex justify-between items-center mb-1">
-          <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">RÉSUMÉ FINANCIER GLOBAL</h2>
+          <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">TABLEAU DE BORD FINANCIER</h2>
           <button onclick="openNewSaleModal()" class="text-[11px] bg-[#4a9e4e] text-white px-2.5 py-1 rounded-lg font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
             <span>+</span> <span>Nouvelle Vente</span>
           </button>
         </div>
         
-        <!-- Double-Grid MycoTrack KPIs -->
+        <!-- Grille Principale des Finances (Style MycoTrack 6 KPIs) -->
         <div class="grid grid-cols-2 gap-2">
+          <!-- Chiffre d'affaires -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Chiffre d'affaires</p>
             <p class="text-base font-bold text-white mt-0.5">${totalRevenue.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">${state.deliveries.length} livraisons</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${state.deliveries.length} ventes enregistrées</p>
           </div>
+
+          <!-- Frais livreurs déduits -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Frais livreurs</p>
-            <p class="text-base font-bold text-[#e0b87a] mt-0.5">${totalDelivererFees.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Courses validées</p>
+            <p class="text-[11px] text-[#888]">Frais livreurs déduits</p>
+            <p class="text-base font-bold text-[#e0b87a] mt-0.5">-${totalDelivererFees.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Prélevés sur cash remis</p>
           </div>
+
+          <!-- Dépenses exploitation -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Dépenses</p>
-            <p class="text-base font-bold text-[#e07a7a] mt-0.5">${totalExpenses.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Substrats & intrants</p>
+            <p class="text-[11px] text-[#888]">Dépenses exploitation</p>
+            <p class="text-base font-bold text-[#e07a7a] mt-0.5">-${totalExpenses.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Substrats, gaz, sacs...</p>
           </div>
+
+          <!-- Bénéfice net réel -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Bénéfice net</p>
+            <p class="text-[11px] text-[#888]">Bénéfice net réel</p>
             <p class="text-base font-bold text-[#7bc67e] mt-0.5">${netProfit.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Marge nette réelle</p>
+            <p class="text-[9px] text-[#7bc67e]/80 mt-0.5">Marge nette : ${profitRate}%</p>
           </div>
+
+          <!-- Encaissé Net en Caisse -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Encaissé</p>
-            <p class="text-base font-bold text-[#7bc67e] mt-0.5">${totalCollected.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">En caisse ferme</p>
+            <p class="text-[11px] text-[#888]">En caisse ferme (Net)</p>
+            <p class="text-base font-bold text-[#7bc67e] mt-0.5">${totalNetCashInFarm.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Liquidités remises</p>
           </div>
+
+          <!-- Impayés / Reste à payer -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Impayés</p>
-            <p class="text-base font-bold text-[#e0b87a] mt-0.5">${totalDue.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">${state.clients.filter(c=>c.due>0).length} client(s) redevable(s)</p>
+            <p class="text-[11px] text-[#888]">Reste à payer (Impayés)</p>
+            <p class="text-base font-bold text-[#e0b87a] mt-0.5">${totalRemainingDue.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${state.clients.filter(c=>c.due>0).length} client(s) à terme</p>
           </div>
         </div>
 
-        <!-- Alerte dynamique si stock bas ou impayé -->
-        ${lowStocks.length > 0 || totalDue > 0 ? `
+        <!-- Alerte active si commande en cours ou impayé -->
+        ${pendingDeliveries.length > 0 || totalRemainingDue > 0 || lowStocks.length > 0 ? `
           <div class="mt-2 space-y-1.5">
-            <h2 class="text-xs font-bold text-[#e07a7a] tracking-wider uppercase flex items-center gap-1.5">
-              <span>⚠️</span> <span>ALERTES IMMÉDIATES (${lowStocks.length + (totalDue > 0 ? 1 : 0)})</span>
+            <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase flex items-center gap-1.5">
+              <span>⚠️</span> <span>SUIVI OPÉRATIONNEL & CRÉDITS</span>
             </h2>
-            ${lowStocks.map(s => `
-              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a] flex justify-between items-center">
+
+            ${pendingDeliveries.map(d => `
+              <div class="bg-[#1f2a1a] p-2.5 rounded-xl border border-[#4a9e4e]/40 text-xs flex justify-between items-center">
                 <div>
-                  <p class="font-bold">🔴 Stock critique : ${s.name}</p>
-                  <p class="text-[10px] text-[#aaa]">Reste <strong>${s.quantity} ${s.unit}</strong> (seuil alerte : ${s.threshold} ${s.unit})</p>
+                  <p class="font-bold text-white flex items-center gap-1.5">
+                    <span class="font-mono text-[10px] text-[#7bc67e]">${d.orderNumber}</span>
+                    <span>• ${d.clientName} (${d.quantityKg} kg)</span>
+                  </p>
+                  <p class="text-[10px] text-[#aaa]">Livreur : <strong>${d.delivererName}</strong> • ${d.totalAmount.toLocaleString()} DA</p>
                 </div>
-                <button onclick="openStockMvtModal('${s.id}', 'in')" class="px-2.5 py-1 bg-[#4a9e4e] text-white rounded-lg text-[10px] font-bold shadow hover:bg-emerald-600">
-                  + Réappro
-                </button>
+                <div class="text-right">
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                    d.status === 'pending_acceptance' ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40' :
+                    (d.status === 'in_delivery' ? 'bg-blue-900/60 text-blue-300 border border-blue-500/40' : 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40')
+                  }">
+                    ${d.status === 'pending_acceptance' ? 'En attente livreur' : (d.status === 'in_delivery' ? 'En livraison' : 'Livré • Clôture')}
+                  </span>
+                  <button onclick="switchTab('sales')" class="block mt-1 text-[10px] text-[#7bc67e] underline text-right">Voir détails</button>
+                </div>
               </div>
             `).join('')}
+
             ${state.clients.filter(c => c.due > 0).map(c => `
               <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e0b87a] flex justify-between items-center">
                 <div>
-                  <p class="font-bold">🔴 Impayé : ${c.name}</p>
-                  <p class="text-[10px] text-[#aaa]">Reste à régler : <strong>${c.due.toLocaleString()} DA</strong></p>
+                  <p class="font-bold">🔴 Reste à payer client : ${c.name}</p>
+                  <p class="text-[10px] text-[#aaa]">Montant dû : <strong>${c.due.toLocaleString()} DA</strong></p>
                 </div>
                 <a href="tel:${c.phone}" class="px-2.5 py-1 bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40 rounded-lg text-[10px] font-bold">
                   📞 Relancer
                 </a>
               </div>
             `).join('')}
+
+            ${lowStocks.map(s => `
+              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a] flex justify-between items-center">
+                <div>
+                  <p class="font-bold">🔴 Stock critique : ${s.name}</p>
+                  <p class="text-[10px] text-[#aaa]">Reste <strong>${s.quantity} ${s.unit}</strong> (seuil alerte : ${s.threshold} ${s.unit})</p>
+                </div>
+                <button onclick="switchTab('stock')" class="px-2 py-0.5 bg-[#4a9e4e] text-white rounded text-[10px] font-bold">
+                  Stock
+                </button>
+              </div>
+            `).join('')}
           </div>
         ` : ''}
 
-        <!-- Modules Raccourcis Rapides -->
+        <!-- Modules Raccourcis -->
         <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-2 mb-1">MODULES DE GESTION</h2>
         <div class="grid grid-cols-2 gap-2">
+          <div onclick="switchTab('sales')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">🛒</span>
+            <h3 class="text-xs font-bold text-white mt-1">Ventes & Courses</h3>
+            <p class="text-[10px] text-[#888]">${state.deliveries.length} commandes totales</p>
+          </div>
           <div onclick="switchTab('clients')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">👤</span>
             <h3 class="text-xs font-bold text-white mt-1">Clients & Tarifs</h3>
-            <p class="text-[10px] text-[#888]">${state.clients.length} clients enregistrés</p>
+            <p class="text-[10px] text-[#888]">${state.clients.length} clients réguliers</p>
           </div>
           <div onclick="switchTab('stock')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">📦</span>
             <h3 class="text-xs font-bold text-white mt-1">Stocks & Intrants</h3>
-            <p class="text-[10px] ${lowStocks.length > 0 ? 'text-[#e07a7a] font-bold' : 'text-[#888]'}">
-              ${lowStocks.length > 0 ? `${lowStocks.length} alerte(s) stock` : `${state.stocks.length} articles à jour`}
-            </p>
+            <p class="text-[10px] text-[#888]">${state.stocks.length} articles suivis</p>
           </div>
           <div onclick="switchTab('bags')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">🍄</span>
-            <h3 class="text-xs font-bold text-white mt-1">Sacs & Lots 200L</h3>
-            <p class="text-[10px] text-[#888]">${state.bags.length} sacs suivis</p>
+            <h3 class="text-xs font-bold text-white mt-1">Culture & Sacs</h3>
+            <p class="text-[10px] text-[#888]">${state.bags.length} sacs en cycle</p>
           </div>
-          <div onclick="switchTab('expenses')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
-            <span class="text-xl">💸</span>
-            <h3 class="text-xs font-bold text-white mt-1">Dépenses Exploitation</h3>
-            <p class="text-[10px] text-[#888]">${totalExpenses.toLocaleString()} DA enregistrés</p>
-          </div>
-        </div>
-
-        <!-- Production Sacs Actifs -->
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-2 mb-1">🍄 PRODUCTION — SACS ACTIFS</h2>
-        <div class="bg-[#1a2a1a] px-3.5 py-1 rounded-2xl border border-[#2d4a2d] text-xs divide-y divide-[#2d4a2d]">
-          <div class="flex justify-between py-2 text-[#aaa]"><span>🧪 Ensemencement</span> <span class="font-bold text-white">0</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>🌡️ Incubation</span> <span class="font-bold text-white">${activeIncub}</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>🍄 Fructification</span> <span class="font-bold text-white">${activeFruit}</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>☣️ Contaminés</span> <span class="font-bold text-[#e07a7a]">${activeContam}</span></div>
         </div>
       `;
     }
 
     // ==========================================
-    // 2. GESTION DES CLIENTS (CRUD COMPLET)
+    // 2. MODULE VENTES & LIVRAISONS (NOUVEAU FLUX)
+    // ==========================================
+    function renderSalesView() {
+      const container = document.getElementById('app-content');
+      container.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+          <div>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Commandes & Ventes</h2>
+            <p class="text-[10px] text-[#888]">Suivi des livraisons et des encaissements caisse</p>
+          </div>
+          <button onclick="openNewSaleModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouvelle Vente</span>
+          </button>
+        </div>
+
+        <div class="space-y-2.5 mt-2">
+          ${state.deliveries.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
+              <p class="text-sm text-[#888]">Aucune commande pour l'instant.</p>
+              <button onclick="openNewSaleModal()" class="mt-3 px-3 py-1.5 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Créer une Vente</button>
+            </div>
+          ` : ''}
+
+          ${state.deliveries.map(d => {
+            const isSettled = d.status === 'settled';
+            const isPendingAccept = d.status === 'pending_acceptance';
+            const isInDelivery = d.status === 'in_delivery';
+            const isDelivered = d.status === 'delivered_pending_settlement';
+
+            return `
+              <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border ${isSettled ? 'border-[#2d4a2d]' : 'border-[#e0b87a] bg-[#1d271d]'} space-y-2">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-bold font-mono text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md">${d.orderNumber}</span>
+                      <span class="text-[10px] text-[#888]">${d.createdAt}</span>
+                    </div>
+                    <h3 class="font-bold text-white text-sm mt-1">${d.clientName}</h3>
+                  </div>
+
+                  <!-- Badge statut commande -->
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isSettled ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' :
+                    (isPendingAccept ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40 animate-pulse' :
+                    (isInDelivery ? 'bg-blue-900/60 text-blue-300 border border-blue-500/40' : 'bg-purple-900/60 text-purple-300 border border-purple-500/40'))
+                  }">
+                    ${isSettled ? '✅ Clôturée & Encaissée' :
+                      (isPendingAccept ? '⏳ Livreur notifié (Attente)' :
+                      (isInDelivery ? '🛵 En cours de livraison' : '📦 Livré (À clôturer)'))}
+                  </span>
+                </div>
+
+                <!-- Détails financiers de la commande -->
+                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs space-y-1">
+                  <div class="flex justify-between text-[#aaa]">
+                    <span>Quantité : <strong>${d.quantityKg} kg</strong> × ${d.pricePerKg} DA</span>
+                    <strong class="text-white text-sm">${d.totalAmount.toLocaleString()} DA</strong>
+                  </div>
+                  <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d]/50 pt-1">
+                    <span>Livreur assigné : <strong>${d.delivererName}</strong></span>
+                    <span class="text-[#e0b87a]">Course : ${d.deliveryFee} DA</span>
+                  </div>
+
+                  ${isSettled ? `
+                    <div class="flex justify-between text-xs border-t border-[#2d4a2d]/50 pt-1">
+                      <span class="${d.clientRemainingDue > 0 ? 'text-[#e07a7a] font-bold' : 'text-[#7bc67e]'}">
+                        ${d.clientRemainingDue > 0 ? `🔴 Reste à payer client : ${d.clientRemainingDue.toLocaleString()} DA` : '✓ Client a payé 100%'}
+                      </span>
+                      <strong class="text-[#7bc67e]">Net caisse : +${d.netCashToFarm.toLocaleString()} DA</strong>
+                    </div>
+                  ` : ''}
+                </div>
+
+                <p class="text-xs text-[#aaa]">📍 ${d.clientAddress}</p>
+
+                <!-- Actions contextuelles selon statut -->
+                <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
+                  <a href="tel:${d.clientPhone}" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                    <span>📞</span> <span>Client</span>
+                  </a>
+
+                  ${!isSettled ? `
+                    <button onclick="openSettlementModal('${d.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 flex items-center justify-center gap-1">
+                      <span>💰</span> <span>Valider Paiement & Caisse</span>
+                    </button>
+                  ` : `
+                    <button onclick="openSettlementModal('${d.id}')" class="flex-1 py-1.5 bg-[#1a2a1a] text-slate-300 border border-[#2d4a2d] rounded-xl text-xs font-semibold flex items-center justify-center gap-1">
+                      <span>🔍</span> <span>Voir Reçu Caisse</span>
+                    </button>
+                  `}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // Modale de Création de Vente avec calculs automatiques
+    function openNewSaleModal(preselectedClientId = null) {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>🛒</span> <span>Créer une Vente & Assigner un Livreur</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Sélectionnez le client et le livreur. Les montants et frais se calculent automatiquement.</p>
+        
+        <div class="space-y-2.5 text-xs">
+          <!-- 1. Client -->
+          <div>
+            <label class="text-[#888] block mb-1">Client acheteur *</label>
+            <select id="vte-client-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="recalculateSaleForm()">
+              ${state.clients.map(c => `
+                <option value="${c.id}" ${c.id === preselectedClientId ? 'selected' : ''}>
+                  ${c.name} — (${c.price} DA / kg)
+                </option>
+              `).join('')}
+            </select>
+          </div>
+
+          <!-- 2. Quantité vendue -->
+          <div>
+            <label class="text-[#888] block mb-1">Quantité de pleurotes frais (kg) *</label>
+            <input id="vte-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" value="5.0" oninput="recalculateSaleForm()">
+          </div>
+
+          <!-- 3. Livreur assigné -->
+          <div>
+            <label class="text-[#888] block mb-1">Livreur assigné *</label>
+            <select id="vte-deliverer-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="recalculateSaleForm()">
+              ${deliverersList.map(deliv => `
+                <option value="${deliv.id}">
+                  ${deliv.name} — (Course : ${deliv.fee} DA)
+                </option>
+              `).join('')}
+            </select>
+          </div>
+
+          <!-- 4. Récapitulatif calculé en direct -->
+          <div id="vte-calc-summary" class="bg-[#0f1a0f] p-3 rounded-xl border border-[#7bc67e]/40 space-y-1.5 text-xs">
+            <!-- Rempli par recalculateSaleForm() -->
+          </div>
+
+          <div class="pt-2 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewSale()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">
+              Valider & Notifier Livreur
+            </button>
+          </div>
+        </div>
+      `);
+      recalculateSaleForm();
+    }
+
+    function recalculateSaleForm() {
+      const cliId = document.getElementById('vte-client-id').value;
+      const client = state.clients.find(c => c.id === cliId);
+      const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
+      const delivId = document.getElementById('vte-deliverer-id').value;
+      const deliverer = deliverersList.find(d => d.id === delivId);
+
+      if (!client || !deliverer) return;
+
+      const totalFacture = Math.round(qty * client.price);
+      const fee = deliverer.fee;
+      const netEstime = totalFacture - fee;
+
+      document.getElementById('vte-calc-summary').innerHTML = `
+        <div class="flex justify-between text-[#aaa]">
+          <span>Prix négocié client :</span>
+          <span class="text-white font-semibold">${client.price} DA / kg</span>
+        </div>
+        <div class="flex justify-between text-[#aaa]">
+          <span>Total facturé client :</span>
+          <strong class="text-white text-sm">${totalFacture.toLocaleString()} DA</strong>
+        </div>
+        <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d] pt-1">
+          <span>Frais course livreur :</span>
+          <span class="text-[#e0b87a] font-semibold">${fee} DA</span>
+        </div>
+        <div class="flex justify-between text-xs pt-1 border-t border-[#7bc67e]/30">
+          <span class="text-[#7bc67e]">Net caisse estimé (si payé 100%) :</span>
+          <strong class="text-[#7bc67e] text-sm">+${netEstime.toLocaleString()} DA</strong>
+        </div>
+      `;
+    }
+
+    function saveNewSale() {
+      const cliId = document.getElementById('vte-client-id').value;
+      const client = state.clients.find(c => c.id === cliId);
+      const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
+      const delivId = document.getElementById('vte-deliverer-id').value;
+      const deliverer = deliverersList.find(d => d.id === delivId);
+
+      if (!client || qty <= 0 || !deliverer) return alert('Veuillez saisir une quantité valide.');
+
+      const totalAmount = Math.round(qty * client.price);
+      const orderNum = 'VTE-2026-' + String(state.deliveries.length + 1).padStart(3, '0');
+
+      const newOrder = {
+        id: 'vte_' + Date.now(),
+        orderNumber: orderNum,
+        clientId: client.id,
+        clientName: client.name,
+        clientPhone: client.phone,
+        clientAddress: client.address,
+        quantityKg: qty,
+        pricePerKg: client.price,
+        totalAmount: totalAmount,
+        delivererId: deliverer.id,
+        delivererName: deliverer.name,
+        deliveryFee: deliverer.fee,
+        status: 'pending_acceptance', // Actif pour le livreur !
+        isClientPaid: false,
+        amountCollected: 0,
+        clientRemainingDue: totalAmount,
+        delivererFeeDeducted: 0,
+        netCashToFarm: 0,
+        createdAt: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      };
+
+      state.deliveries.unshift(newOrder);
+      saveState();
+      closeModal();
+      showToast(`Vente ${orderNum} créée ! Livreur ${deliverer.name} notifié.`);
+    }
+
+    // ==========================================
+    // 3. VALIDATION ENCAISSEMENT & DÉCOMPTE CAISSE
+    // ==========================================
+    function openSettlementModal(orderId) {
+      const d = state.deliveries.find(x => x.id === orderId);
+      if (!d) return;
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-1.5">
+          <span>💰</span> <span>Validation Encaissement & Décompte Caisse</span>
+        </h3>
+        <p class="text-xs text-[#7bc67e] mb-2 font-mono">${d.orderNumber} • ${d.clientName}</p>
+
+        <div class="bg-[#0f1a0f] p-3 rounded-2xl border border-[#2d4a2d] space-y-1.5 text-xs mb-3">
+          <div class="flex justify-between text-[#aaa]">
+            <span>Marchandise livrée :</span>
+            <span class="text-white font-bold">${d.quantityKg} kg à ${d.pricePerKg} DA/kg</span>
+          </div>
+          <div class="flex justify-between text-[#aaa]">
+            <span>Total dû par le client :</span>
+            <strong class="text-white text-base">${d.totalAmount.toLocaleString()} DA</strong>
+          </div>
+          <div class="flex justify-between text-[#aaa]">
+            <span>Frais du livreur (${d.delivererName}) :</span>
+            <strong class="text-[#e0b87a]">${d.deliveryFee} DA</strong>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <!-- Question : Le client a-t-il payé ? -->
+          <div>
+            <label class="text-white font-bold block mb-1.5">Le client a-t-il réglé la commande ?</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="setClientPaymentChoice(true, ${d.totalAmount}, ${d.deliveryFee})" id="btn-pay-yes" class="py-2.5 rounded-xl border border-[#4a9e4e] bg-[#1f3a1f] text-[#7bc67e] font-bold text-xs flex items-center justify-center gap-1">
+                <span>✅</span> <span>OUI (Payé 100%)</span>
+              </button>
+              <button onclick="setClientPaymentChoice(false, ${d.totalAmount}, ${d.deliveryFee})" id="btn-pay-no" class="py-2.5 rounded-xl border border-[#e07a7a]/50 bg-[#2a1a1a] text-[#e07a7a] font-bold text-xs flex items-center justify-center gap-1">
+                <span>⚠️</span> <span>NON / Partiel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Montant effectivement perçu -->
+          <div id="collected-box" class="space-y-1">
+            <label class="text-[#888] block">Montant effectivement perçu du client (DA) :</label>
+            <input id="collected-input" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" value="${d.totalAmount}" oninput="updateSettlementBreakdown(${d.totalAmount}, ${d.deliveryFee})">
+          </div>
+
+          <!-- Décompte automatique en direct -->
+          <div id="settlement-breakdown" class="bg-[#142214] p-3 rounded-2xl border border-[#4a9e4e]/40 space-y-2 text-xs">
+            <!-- Rempli dynamiquement -->
+          </div>
+
+          <div class="pt-2 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="applySettlement('${d.id}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">
+              Valider & Clôturer Caisse
+            </button>
+          </div>
+        </div>
+      `);
+
+      updateSettlementBreakdown(d.totalAmount, d.deliveryFee);
+    }
+
+    function setClientPaymentChoice(isFull, totalAmount, fee) {
+      const input = document.getElementById('collected-input');
+      const yesBtn = document.getElementById('btn-pay-yes');
+      const noBtn = document.getElementById('btn-pay-no');
+
+      if (isFull) {
+        input.value = totalAmount;
+        yesBtn.className = "py-2.5 rounded-xl border-2 border-[#4a9e4e] bg-[#1f3a1f] text-[#7bc67e] font-bold text-xs shadow";
+        noBtn.className = "py-2.5 rounded-xl border border-[#2d4a2d] bg-[#1a2a1a] text-slate-400 font-semibold text-xs";
+      } else {
+        input.value = 0;
+        noBtn.className = "py-2.5 rounded-xl border-2 border-[#e07a7a] bg-[#3a1a1a] text-[#e07a7a] font-bold text-xs shadow";
+        yesBtn.className = "py-2.5 rounded-xl border border-[#2d4a2d] bg-[#1a2a1a] text-slate-400 font-semibold text-xs";
+      }
+      updateSettlementBreakdown(totalAmount, fee);
+    }
+
+    function updateSettlementBreakdown(totalAmount, delivererFee) {
+      const val = parseFloat(document.getElementById('collected-input').value) || 0;
+      const remainingDue = Math.max(0, totalAmount - val);
+      const isFeeCovered = val >= delivererFee;
+      const netToFarm = isFeeCovered ? (val - delivererFee) : 0;
+      const delivererDueFromFarm = isFeeCovered ? 0 : (delivererFee - val);
+
+      document.getElementById('settlement-breakdown').innerHTML = `
+        <div class="flex justify-between text-xs">
+          <span class="text-[#aaa]">Reste à payer client (Impayé) :</span>
+          <strong class="${remainingDue > 0 ? 'text-[#e07a7a] text-sm font-bold' : 'text-[#7bc67e]'}">
+            ${remainingDue > 0 ? `${remainingDue.toLocaleString()} DA` : '0 DA (✓ Réglé)'}
+          </strong>
+        </div>
+
+        <div class="flex justify-between text-xs border-t border-[#2d4a2d] pt-1.5">
+          <span class="text-[#aaa]">Frais livreur déduits sur cash :</span>
+          <strong class="text-[#e0b87a]">-${delivererFee} DA</strong>
+        </div>
+
+        <div class="flex justify-between text-xs border-t border-[#7bc67e]/40 pt-1.5">
+          <span class="text-[#7bc67e] font-bold">Net remis en Caisse Ferme :</span>
+          <strong class="text-[#7bc67e] text-base font-bold">+${netToFarm.toLocaleString()} DA</strong>
+        </div>
+
+        ${delivererDueFromFarm > 0 ? `
+          <p class="text-[10px] text-[#e07a7a] bg-[#2a1a1a] p-1.5 rounded-lg border border-[#5a2a2a] mt-1">
+            ⚠️ Attention : Le client n'a pas versé assez pour payer la course. La ferme doit encore régler <strong>${delivererDueFromFarm} DA</strong> au livreur.
+          </p>
+        ` : ''}
+      `;
+    }
+
+    function applySettlement(orderId) {
+      const d = state.deliveries.find(x => x.id === orderId);
+      if (!d) return;
+
+      const collected = parseFloat(document.getElementById('collected-input').value) || 0;
+      const remainingDue = Math.max(0, d.totalAmount - collected);
+      const isFeeCovered = collected >= d.deliveryFee;
+      const netToFarm = isFeeCovered ? (collected - d.deliveryFee) : 0;
+
+      // Mise à jour de la commande
+      d.status = 'settled';
+      d.amountCollected = collected;
+      d.clientRemainingDue = remainingDue;
+      d.isClientPaid = remainingDue === 0;
+      d.delivererFeeDeducted = d.deliveryFee;
+      d.netCashToFarm = netToFarm;
+
+      // Mise à jour du compte client (si impayé)
+      const client = state.clients.find(c => c.id === d.clientId);
+      if (client) {
+        if (remainingDue > 0) {
+          client.due = (client.due || 0) + remainingDue;
+        }
+      }
+
+      saveState();
+      closeModal();
+      showToast(`Commande ${d.orderNumber} clôturée ! Net en caisse : +${netToFarm.toLocaleString()} DA`);
+    }
+
+    // ==========================================
+    // 4. ESPACE LIVREUR (NOTIFICATION & ACCEPTATION)
+    // ==========================================
+    function renderDeliveryView() {
+      const container = document.getElementById('app-content');
+      
+      // Filtrer les courses actives
+      const pendingDeliveries = state.deliveries.filter(d => d.status !== 'settled');
+      const pastDeliveries = state.deliveries.filter(d => d.status === 'settled');
+
+      container.innerHTML = `
+        <div class="flex justify-between items-center mb-2">
+          <div>
+            <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase">🚚 Espace Livreur Chauffeur</h2>
+            <p class="text-[10px] text-[#888]">${pendingDeliveries.length} course(s) active(s)</p>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-md bg-[#2a2214] text-[#e0b87a] border border-[#e0b87a]/30 font-bold">
+            Tarif course auto
+          </span>
+        </div>
+
+        <!-- Alerte Notification Livreur si nouvelle course -->
+        ${state.deliveries.some(d => d.status === 'pending_acceptance') ? `
+          <div class="bg-amber-950/70 border-2 border-amber-500/80 p-3 rounded-2xl flex items-center gap-3 animate-pulse mb-3">
+            <span class="text-2xl">🔔</span>
+            <div>
+              <p class="text-xs font-bold text-amber-200">NOUVELLE COURSE ASSIGNÉE !</p>
+              <p class="text-[10px] text-amber-300/80">Une livraison vous attend. Veuillez l'accepter ci-dessous.</p>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Liste des courses actives -->
+        <div class="space-y-3">
+          ${pendingDeliveries.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
+              <span class="text-3xl">🛵</span>
+              <p class="text-xs text-[#888] mt-2">Aucune course en attente.</p>
+              <p class="text-[10px] text-[#666]">Les nouvelles commandes s'afficheront ici en direct.</p>
+            </div>
+          ` : ''}
+
+          ${pendingDeliveries.map(d => {
+            const isPendingAccept = d.status === 'pending_acceptance';
+            const isInDelivery = d.status === 'in_delivery';
+
+            return `
+              <div class="bg-[#1a2a1a] p-4 rounded-2xl border ${isPendingAccept ? 'border-amber-500' : 'border-[#4a9e4e]'} space-y-2.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-mono font-bold text-[#888]">${d.orderNumber}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isPendingAccept ? 'bg-amber-900/80 text-amber-300 border border-amber-500/50' : 'bg-blue-900/80 text-blue-300 border border-blue-500/50'
+                  }">
+                    ${isPendingAccept ? '🔔 À accepter' : '🛵 En route vers client'}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 class="font-bold text-white text-base">${d.clientName}</h3>
+                  <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">🍄 ${d.quantityKg} kg de pleurotes frais</p>
+                  <p class="text-xs text-[#aaa] mt-1">📍 ${d.clientAddress}</p>
+                </div>
+
+                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center">
+                  <div>
+                    <span class="text-[#888] text-[10px]">À encaisser auprès du client :</span>
+                    <p class="font-bold text-white text-sm">${d.totalAmount.toLocaleString()} DA</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[#888] text-[10px]">Vos frais de course :</span>
+                    <p class="font-bold text-[#e0b87a] text-sm">+${d.deliveryFee} DA</p>
+                  </div>
+                </div>
+
+                ${isPendingAccept ? `
+                  <button onclick="acceptDelivery('${d.id}')" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+                    <span>🛵</span> <span>Accepter la Course</span>
+                  </button>
+                ` : `
+                  <div class="grid grid-cols-2 gap-2 pt-1">
+                    <a href="tel:${d.clientPhone}" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+                      <span>📞</span> Appeler
+                    </a>
+                    <button onclick="alert('GPS vers : ' + '${d.clientAddress}')" class="py-2.5 bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
+                      <span>🗺️</span> Itinéraire
+                    </button>
+                  </div>
+                  <button onclick="openSettlementModal('${d.id}')" class="w-full py-2.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/50 font-bold rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-[#2e522e]">
+                    <span>📦</span> <span>Livraison effectuée & Décompte Caisse</span>
+                  </button>
+                `}
+              </div>
+            `;
+          }).join('')}
+
+          ${pastDeliveries.length > 0 ? `
+            <h3 class="text-xs font-bold text-[#888] tracking-wider uppercase mt-4 mb-2">Historique des courses clôturées (${pastDeliveries.length})</h3>
+            ${pastDeliveries.slice(0, 3).map(d => `
+              <div class="bg-[#121c12] p-3 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center opacity-75">
+                <div>
+                  <span class="font-bold text-white">${d.clientName}</span>
+                  <span class="text-[10px] text-[#888] block">${d.quantityKg} kg • Course : ${d.deliveryFee} DA</span>
+                </div>
+                <span class="text-[#7bc67e] font-bold text-[10px]">✓ Clôturée</span>
+              </div>
+            `).join('')}
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function acceptDelivery(id) {
+      const d = state.deliveries.find(x => x.id === id);
+      if (d) {
+        d.status = 'in_delivery';
+        saveState();
+        showToast('Course acceptée ! Vous êtes en route vers le client.');
+      }
+    }
+
+    // ==========================================
+    // 5. GESTION DES CLIENTS
     // ==========================================
     function renderClientsView() {
       const container = document.getElementById('app-content');
@@ -397,13 +1021,6 @@
         </div>
 
         <div class="space-y-2 mt-2">
-          ${state.clients.length === 0 ? `
-            <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
-              <p class="text-sm text-[#888]">Aucun client pour le moment.</p>
-              <button onclick="openNewClientModal()" class="mt-3 px-3 py-1 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Ajouter votre premier client</button>
-            </div>
-          ` : ''}
-
           ${state.clients.map(c => `
             <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2">
               <div class="flex justify-between items-start">
@@ -420,14 +1037,13 @@
                 </div>
               </div>
 
-              <!-- Tarif & Localisation -->
               <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] flex justify-between items-center text-xs">
                 <div>
                   <span class="text-[#888] text-[10px]">Tarif négocié</span>
                   <p class="font-bold text-[#7bc67e] text-sm">${c.price.toLocaleString()} DA <span class="text-[10px] text-[#888]">/ kg</span></p>
                 </div>
                 <div class="text-right">
-                  <span class="text-[#888] text-[10px]">Statut financier</span>
+                  <span class="text-[#888] text-[10px]">Reste à payer (Dû)</span>
                   <p class="font-bold text-xs ${c.due > 0 ? 'text-[#e07a7a]' : 'text-[#7bc67e]'}">
                     ${c.due > 0 ? `🔴 Impayé : ${c.due.toLocaleString()} DA` : '✓ À jour'}
                   </p>
@@ -438,12 +1054,11 @@
                 <span>📍</span> <span>${c.address}, ${c.city}</span>
               </p>
 
-              <!-- Actions directes -->
               <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
                 <a href="tel:${c.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
                   <span>📞</span> <span>${c.phone}</span>
                 </a>
-                <button onclick="openNewSaleForClient('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
+                <button onclick="openNewSaleModal('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
                   <span>🛒</span> <span>Créer Vente</span>
                 </button>
               </div>
@@ -458,36 +1073,33 @@
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
           <span>👤</span> <span>Ajouter un Nouveau Client</span>
         </h3>
-        <p class="text-[11px] text-[#888] mb-3">Enregistrez les coordonnées et le prix convenu par kilo.</p>
-        
         <div class="space-y-2 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Nom du restaurant / Client *</label>
-            <input id="cli-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Hôtel Sheraton Club des Pins">
+            <label class="text-[#888] block mb-1">Nom / Enseigne *</label>
+            <input id="cli-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Hôtel Le Djurdjura">
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="text-[#888] block mb-1">Nom du contact</label>
-              <input id="cli-contact" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chef Karim">
+              <label class="text-[#888] block mb-1">Contact</label>
+              <input id="cli-contact" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chef Omar">
             </div>
             <div>
-              <label class="text-[#888] block mb-1">Type de client</label>
+              <label class="text-[#888] block mb-1">Type</label>
               <select id="cli-type" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
                 <option value="Restaurant">Restaurant</option>
                 <option value="Pizzeria">Pizzeria</option>
                 <option value="Supermarché">Supermarché</option>
                 <option value="Grossiste">Grossiste</option>
-                <option value="Particulier">Particulier</option>
               </select>
             </div>
           </div>
           <div>
-            <label class="text-[#888] block mb-1">Numéro de Téléphone *</label>
-            <input id="cli-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" placeholder="ex: +213 555 12 34 56" value="+213">
+            <label class="text-[#888] block mb-1">Téléphone *</label>
+            <input id="cli-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" value="+213">
           </div>
           <div>
-            <label class="text-[#888] block mb-1">Adresse de livraison</label>
-            <input id="cli-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Route des Dunes, Staouéli">
+            <label class="text-[#888] block mb-1">Adresse</label>
+            <input id="cli-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: 12 Rue Hassiba Ben Bouali">
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
@@ -499,10 +1111,9 @@
               <input id="cli-price" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="1200">
             </div>
           </div>
-
           <div class="pt-3 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="saveNewClient()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">Enregistrer Client</button>
+            <button onclick="saveNewClient()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">Enregistrer</button>
           </div>
         </div>
       `);
@@ -517,24 +1128,20 @@
       const city = document.getElementById('cli-city').value.trim();
       const price = parseFloat(document.getElementById('cli-price').value) || 1200;
 
-      if (!name) return alert('Le nom du client est obligatoire.');
-      if (!phone || phone === '+213') return alert('Le numéro de téléphone est obligatoire.');
+      if (!name) return alert('Nom obligatoire.');
+      if (!phone || phone === '+213') return alert('Téléphone obligatoire.');
 
       state.clients.unshift({
         id: 'cli_' + Date.now(),
-        name,
-        contact,
-        type,
-        phone,
+        name, contact, type, phone,
         address: address || 'Alger',
         city: city || 'Alger',
-        price,
-        due: 0
+        price, due: 0
       });
 
       saveState();
       closeModal();
-      showToast('Nouveau client ajouté !');
+      showToast('Client enregistré !');
     }
 
     function openEditClientModal(id) {
@@ -544,26 +1151,16 @@
         <h3 class="text-sm font-bold text-white mb-2">Modifier Client : ${c.name}</h3>
         <div class="space-y-2 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Nom / Enseigne</label>
-            <input id="edit-cli-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${c.name}">
+            <label class="text-[#888] block mb-1">Tarif négocié (DA/kg)</label>
+            <input id="edit-cli-price" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.price}">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Solde d'impayé / Dû (DA)</label>
+            <input id="edit-cli-due" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.due || 0}">
           </div>
           <div>
             <label class="text-[#888] block mb-1">Téléphone</label>
             <input id="edit-cli-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" value="${c.phone}">
-          </div>
-          <div>
-            <label class="text-[#888] block mb-1">Adresse</label>
-            <input id="edit-cli-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${c.address}">
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-[#888] block mb-1">Tarif (DA/kg)</label>
-              <input id="edit-cli-price" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.price}">
-            </div>
-            <div>
-              <label class="text-[#888] block mb-1">Impayé / Dû (DA)</label>
-              <input id="edit-cli-due" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.due || 0}">
-            </div>
           </div>
           <div class="pt-3 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
@@ -576,11 +1173,9 @@
     function applyEditClient(id) {
       const c = state.clients.find(x => x.id === id);
       if (!c) return;
-      c.name = document.getElementById('edit-cli-name').value.trim();
-      c.phone = document.getElementById('edit-cli-phone').value.trim();
-      c.address = document.getElementById('edit-cli-address').value.trim();
       c.price = parseFloat(document.getElementById('edit-cli-price').value) || c.price;
       c.due = parseFloat(document.getElementById('edit-cli-due').value) || 0;
+      c.phone = document.getElementById('edit-cli-phone').value.trim();
       saveState();
       closeModal();
       showToast('Client mis à jour !');
@@ -589,29 +1184,23 @@
     function deleteClient(id) {
       const c = state.clients.find(x => x.id === id);
       if (!c) return;
-      if (confirm(`Confirmez-vous la suppression du client "${c.name}" ?`)) {
+      if (confirm(`Supprimer le client "${c.name}" ?`)) {
         state.clients = state.clients.filter(x => x.id !== id);
         saveState();
         showToast('Client supprimé.');
       }
     }
 
-    function openNewSaleForClient(cliId) {
-      openNewSaleModal(cliId);
-    }
-
     // ==========================================
-    // 3. GESTION DU STOCK & INTRANTS (CRUD)
+    // 6. GESTION DU STOCK
     // ==========================================
     function renderStockView() {
       const container = document.getElementById('app-content');
-      const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
-
       container.innerHTML = `
         <div class="flex justify-between items-center mb-1">
           <div>
             <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Stocks & Intrants</h2>
-            <p class="text-[10px] text-[#888]">${state.stocks.length} matières suivies • ${lowCount} seuil(s) critique(s)</p>
+            <p class="text-[10px] text-[#888]">${state.stocks.length} articles suivis</p>
           </div>
           <button onclick="openNewStockModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
             <span>+</span> <span>Nouvel Article</span>
@@ -630,19 +1219,18 @@
                       <span>${s.name}</span>
                     </h3>
                     <p class="text-[10px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-[#888]'} mt-0.5">
-                      Stock actuel : <strong>${s.quantity} ${s.unit}</strong> • Seuil alerte : ${s.threshold} ${s.unit}
+                      Stock : <strong>${s.quantity} ${s.unit}</strong> • Seuil alerte : ${s.threshold} ${s.unit}
                     </p>
-                    <p class="text-[9px] text-[#666]">Coût unitaire : ${s.cost || 0} DA / ${s.unit}</p>
                   </div>
-                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer article">🗑️</button>
+                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1">🗑️</button>
                 </div>
 
                 <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/50">
-                  <button onclick="openStockMvtModal('${s.id}', 'in')" class="flex-1 py-1.5 bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
-                    <span>+</span> <span>Entrée (Réappro)</span>
+                  <button onclick="openStockMvtModal('${s.id}', 'in')" class="flex-1 py-1.5 bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold">
+                    + Entrée (Réappro)
                   </button>
-                  <button onclick="openStockMvtModal('${s.id}', 'out')" class="flex-1 py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
-                    <span>-</span> <span>Sortie (Usage)</span>
+                  <button onclick="openStockMvtModal('${s.id}', 'out')" class="flex-1 py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold">
+                    - Sortie (Usage)
                   </button>
                 </div>
               </div>
@@ -654,40 +1242,29 @@
 
     function openNewStockModal() {
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>📦</span> <span>Ajouter un Article au Stock</span>
-        </h3>
-        <p class="text-[11px] text-[#888] mb-3">Paille, blanc de champignon, chaux, sacs micro-perforés...</p>
-        
+        <h3 class="text-sm font-bold text-white mb-2">Ajouter un Article au Stock</h3>
         <div class="space-y-2 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Désignation de l'article *</label>
-            <input id="stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Blanc de Pleurote M2125">
+            <label class="text-[#888] block mb-1">Désignation</label>
+            <input id="stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chaux éteinte">
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[#888] block mb-1">Quantité initiale</label>
-              <input id="stk-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="20">
+              <input id="stk-qty" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="25">
             </div>
             <div>
               <label class="text-[#888] block mb-1">Unité</label>
               <select id="stk-unit" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
-                <option value="kg">kg (kilogrammes)</option>
+                <option value="kg">kg</option>
                 <option value="unités">unités / sacs</option>
                 <option value="L">L (Litres)</option>
-                <option value="paquets">paquets</option>
               </select>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-[#888] block mb-1">Seuil d'alerte critique</label>
-              <input id="stk-threshold" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5">
-            </div>
-            <div>
-              <label class="text-[#888] block mb-1">Prix unitaire (DA)</label>
-              <input id="stk-cost" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="450">
-            </div>
+          <div>
+            <label class="text-[#888] block mb-1">Seuil d'alerte critique</label>
+            <input id="stk-threshold" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5">
           </div>
           <div class="pt-3 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
@@ -702,22 +1279,12 @@
       const qty = parseFloat(document.getElementById('stk-qty').value) || 0;
       const unit = document.getElementById('stk-unit').value;
       const threshold = parseFloat(document.getElementById('stk-threshold').value) || 5;
-      const cost = parseFloat(document.getElementById('stk-cost').value) || 0;
 
-      if (!name) return alert('Désignation obligatoire');
-
-      state.stocks.push({
-        id: 'stk_' + Date.now(),
-        name,
-        quantity: qty,
-        unit,
-        threshold,
-        cost
-      });
-
+      if (!name) return alert('Désignation requise.');
+      state.stocks.push({ id: 'stk_' + Date.now(), name, quantity: qty, unit, threshold, cost: 400 });
       saveState();
       closeModal();
-      showToast('Article ajouté au stock !');
+      showToast('Article ajouté !');
     }
 
     function openStockMvtModal(id, type) {
@@ -725,23 +1292,16 @@
       if (!item) return;
 
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-1">
-          ${type === 'in' ? '🟢 + Entrée de Stock (Réappro)' : '🔴 - Sortie de Stock (Usage)'}
-        </h3>
-        <p class="text-xs text-[#7bc67e] mb-3">${item.name} • Actuel : <strong>${item.quantity} ${item.unit}</strong></p>
-        
+        <h3 class="text-sm font-bold text-white mb-1">${type === 'in' ? '+ Réapprovisionnement' : '- Sortie Consommation'}</h3>
+        <p class="text-xs text-[#7bc67e] mb-3">${item.name} • Actuel : ${item.quantity} ${item.unit}</p>
         <div class="space-y-3 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Quantité à ${type === 'in' ? 'ajouter' : 'déduire'} (${item.unit}) *</label>
-            <input id="mvt-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" placeholder="ex: 15" autofocus>
-          </div>
-          <div>
-            <label class="text-[#888] block mb-1">Motif / Justification</label>
-            <input id="mvt-reason" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${type === 'in' ? 'Achat fournisseur' : 'Usage pasteurisation lot'}">
+            <label class="text-[#888] block mb-1">Quantité (${item.unit})</label>
+            <input id="mvt-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" placeholder="10" autofocus>
           </div>
           <div class="flex gap-2 pt-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="applyStockMvt('${id}', '${type}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider Mouvement</button>
+            <button onclick="applyStockMvt('${id}', '${type}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider</button>
           </div>
         </div>
       `);
@@ -749,24 +1309,19 @@
 
     function applyStockMvt(id, type) {
       const val = parseFloat(document.getElementById('mvt-qty').value);
-      if (!val || val <= 0) return alert('Veuillez entrer une quantité valide (> 0).');
+      if (!val || val <= 0) return alert('Quantité invalide.');
       const item = state.stocks.find(s => s.id === id);
       if (item) {
-        if (type === 'in') {
-          item.quantity = Math.round((item.quantity + val) * 100) / 100;
-        } else {
-          item.quantity = Math.max(0, Math.round((item.quantity - val) * 100) / 100);
-        }
+        if (type === 'in') item.quantity = Math.round((item.quantity + val) * 100) / 100;
+        else item.quantity = Math.max(0, Math.round((item.quantity - val) * 100) / 100);
         saveState();
-        showToast(`Stock ${item.name} mis à jour : ${item.quantity} ${item.unit}`);
+        showToast('Stock mis à jour.');
       }
       closeModal();
     }
 
     function deleteStockItem(id) {
-      const item = state.stocks.find(s => s.id === id);
-      if (!item) return;
-      if (confirm(`Supprimer l'article "${item.name}" du stock ?`)) {
+      if (confirm('Supprimer cet article ?')) {
         state.stocks = state.stocks.filter(s => s.id !== id);
         saveState();
         showToast('Article supprimé.');
@@ -774,36 +1329,30 @@
     }
 
     // ==========================================
-    // 4. CULTURE, SACS & LOTS (PASTEURISATION 200L)
+    // 7. SACS & LOTS (PASTEURISATION 200L)
     // ==========================================
     function renderBagsView() {
       const container = document.getElementById('app-content');
       container.innerHTML = `
         <div class="flex justify-between items-center mb-1">
           <div>
-            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Culture, Sacs & Lots</h2>
-            <p class="text-[10px] text-[#888]">${state.batches.length} lot(s) • ${state.bags.length} sacs suivis</p>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Lots & Sacs de Culture</h2>
+            <p class="text-[10px] text-[#888]">${state.batches.length} lot(s) • ${state.bags.length} sacs</p>
           </div>
           <button onclick="openNewBatchModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
             <span>+</span> <span>Nouveau Lot (200L)</span>
           </button>
         </div>
 
-        <!-- Lots en cours -->
         ${state.batches.map(batch => `
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-1 mb-2">
-            <div class="flex justify-between items-start">
-              <div>
-                <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${batch.id}</span>
-                <h3 class="font-bold text-white text-xs mt-1">${batch.strain}</h3>
-              </div>
-              <span class="text-[10px] font-bold text-[#7bc67e] bg-[#1f3a1f] px-2 py-0.5 rounded-full border border-[#7bc67e]/30">Actif</span>
-            </div>
-            <p class="text-[10px] text-[#aaa]">Substrat : ${batch.strawDry}kg paille sèche (${batch.strawWet}kg égouttée) • ${batch.bagCount} sacs</p>
+            <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${batch.id}</span>
+            <h3 class="font-bold text-white text-xs mt-1">${batch.strain}</h3>
+            <p class="text-[10px] text-[#aaa]">Paille sèche : ${batch.strawDry}kg (${batch.strawWet}kg humide) • ${batch.bagCount} sacs</p>
           </div>
         `).join('')}
 
-        <h3 class="text-xs font-bold text-white mt-3 mb-1">Sacs individuels & Pesées de récolte :</h3>
+        <h3 class="text-xs font-bold text-white mt-3 mb-1">Sacs & Pesées de Récolte :</h3>
         <div class="space-y-2">
           ${state.bags.map(b => {
             const isFruit = b.status === 'fruiting';
@@ -813,35 +1362,35 @@
                 <div class="flex justify-between items-center">
                   <span class="text-xs font-mono font-bold text-white">${b.id}</span>
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isFruit ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 
-                    (isContam ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40')
+                    isFruit ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' :
+                    (isContam ? 'bg-[#3a1a1a] text-[#e07a7a]' : 'bg-[#3a2e1a] text-[#e0b87a]')
                   }">
                     ${isFruit ? '🍄 Fructification' : (isContam ? '☣️ Contaminé' : '🌡️ Incubation')}
                   </span>
                 </div>
 
                 <div class="flex justify-between text-xs text-[#aaa] bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d]">
-                  <span>Poids substrat : <strong>${b.weight} kg</strong></span>
+                  <span>Poids : ${b.weight} kg</span>
                   <span>Récolté : <strong class="text-[#7bc67e] text-sm">${b.harvestedKg || 0} kg</strong></span>
                 </div>
 
                 ${!isContam ? `
                   <div class="flex gap-2 pt-1">
                     ${!isFruit ? `
-                      <button onclick="moveToFruiting('${b.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold hover:bg-[#2e522e]">
-                        💧 Mettre en Fructification
+                      <button onclick="moveToFruiting('${b.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold">
+                        💧 Fructification
                       </button>
                     ` : `
-                      <button onclick="openHarvestModal('${b.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 flex items-center justify-center gap-1">
+                      <button onclick="openHarvestModal('${b.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1">
                         <span>⚖️</span> <span>Peser Récolte</span>
                       </button>
                     `}
-                    <button onclick="markContaminated('${b.id}')" class="px-3 py-1.5 bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold hover:bg-[#4a2020]">
+                    <button onclick="markContaminated('${b.id}')" class="px-3 py-1.5 bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold">
                       ☣️ Avarie
                     </button>
                   </div>
                 ` : `
-                  <p class="text-[10px] text-[#e07a7a] font-bold">Sac retiré de la salle de culture (Contamination détectée).</p>
+                  <p class="text-[10px] text-[#e07a7a] font-bold">Sac retiré (Contamination).</p>
                 `}
               </div>
             `;
@@ -852,18 +1401,14 @@
 
     function openNewBatchModal() {
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>🍄</span> <span>Créer un Lot de Pasteurisation (Fût 200L)</span>
-        </h3>
-        <p class="text-[11px] text-[#888] mb-3">Calcul automatique du substrat et génération instantanée des sacs.</p>
-        
+        <h3 class="text-sm font-bold text-white mb-2">Nouveau Lot (Pasteurisation 200L)</h3>
         <div class="space-y-2 text-xs">
           <div>
             <label class="text-[#888] block mb-1">Code du Lot</label>
             <input id="batch-code" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono font-bold" value="LOT-${new Date().toISOString().slice(5,10)}-01">
           </div>
           <div>
-            <label class="text-[#888] block mb-1">Variété / Souche</label>
+            <label class="text-[#888] block mb-1">Souche</label>
             <input id="batch-strain" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="Pleurote Gris HK35">
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -878,7 +1423,7 @@
           </div>
           <div class="pt-3 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="saveNewBatch()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Créer & Générer</button>
+            <button onclick="saveNewBatch()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Créer</button>
           </div>
         </div>
       `);
@@ -891,88 +1436,59 @@
       const count = parseInt(document.getElementById('batch-bags').value) || 10;
 
       state.batches.unshift({
-        id: code,
-        strain,
-        substrate: 'Paille hachée (Fût 200L)',
-        strawDry: dry,
-        strawWet: Math.round(dry * 3.2),
-        spawnKg: 7,
-        bagCount: count,
-        date: new Date().toISOString().slice(0, 10),
-        status: 'Actif'
+        id: code, strain, substrate: 'Paille hachée (Fût 200L)',
+        strawDry: dry, strawWet: Math.round(dry * 3.2), spawnKg: 7, bagCount: count, date: new Date().toISOString().slice(0, 10), status: 'Actif'
       });
 
-      for (let i = 1; i <= Math.min(count, 10); i++) {
+      for (let i = 1; i <= Math.min(count, 8); i++) {
         state.bags.unshift({
           id: `BAG-${code.slice(-5)}-${i.toString().padStart(3, '0')}`,
-          batchId: code,
-          status: 'incubation',
-          weight: 5.0,
-          strain: strain,
-          harvestedKg: 0,
-          room: 'Chambre Incubation'
+          batchId: code, status: 'incubation', weight: 5.0, strain: strain, harvestedKg: 0
         });
       }
-
       saveState();
       closeModal();
-      showToast(`Lot ${code} créé avec succès !`);
+      showToast(`Lot ${code} généré !`);
     }
 
-    function moveToFruiting(bagId) {
-      const b = state.bags.find(x => x.id === bagId);
-      if (b) {
-        b.status = 'fruiting';
-        saveState();
-        showToast(`${bagId} passé en Fructification !`);
+    function moveToFruiting(id) {
+      const b = state.bags.find(x => x.id === id);
+      if (b) { b.status = 'fruiting'; saveState(); showToast('Passé en fructification'); }
+    }
+    function markContaminated(id) {
+      const b = state.bags.find(x => x.id === id);
+      if (b && confirm(`Déclarer ${id} contaminé ?`)) {
+        b.status = 'contaminated'; saveState(); showToast('Sac écarté.');
       }
     }
-
-    function markContaminated(bagId) {
-      const b = state.bags.find(x => x.id === bagId);
-      if (b) {
-        if (confirm(`Déclarer le sac ${bagId} comme contaminé (avarie) ?`)) {
-          b.status = 'contaminated';
-          saveState();
-          showToast(`Avarie enregistrée pour ${bagId}`);
-        }
-      }
-    }
-
-    function openHarvestModal(bagId) {
+    function openHarvestModal(id) {
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>⚖️</span> <span>Pesée Récolte Pleurotes</span>
-        </h3>
-        <p class="text-xs text-[#888] mb-3">Sac identifié : <strong class="text-white font-mono">${bagId}</strong></p>
-        
+        <h3 class="text-sm font-bold text-white mb-2">⚖️ Pesée Récolte (${id})</h3>
         <div class="space-y-3 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Poids de pleurotes frais récoltés (kg) *</label>
+            <label class="text-[#888] block mb-1">Kilos récoltés (kg frais)</label>
             <input id="harvest-val" type="number" step="0.05" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" value="1.25" autofocus>
           </div>
           <div class="flex gap-2 pt-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="applyHarvest('${bagId}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider la Pesée</button>
+            <button onclick="applyHarvest('${id}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider Pesée</button>
           </div>
         </div>
       `);
     }
-
-    function applyHarvest(bagId) {
+    function applyHarvest(id) {
       const val = parseFloat(document.getElementById('harvest-val').value) || 0;
-      if (val <= 0) return alert('Poids invalide.');
-      const b = state.bags.find(x => x.id === bagId);
-      if (b) {
+      const b = state.bags.find(x => x.id === id);
+      if (b && val > 0) {
         b.harvestedKg = Math.round(((b.harvestedKg || 0) + val) * 100) / 100;
         saveState();
-        showToast(`+${val} kg enregistrés pour ${bagId} !`);
+        showToast(`+${val} kg enregistrés !`);
       }
       closeModal();
     }
 
     // ==========================================
-    // 5. GESTION DES DÉPENSES
+    // 8. DÉPENSES EXPLOITATION
     // ==========================================
     function renderExpensesView() {
       const container = document.getElementById('app-content');
@@ -1008,29 +1524,24 @@
 
     function openNewExpenseModal() {
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>💸</span> <span>Ajouter une Dépense d'Exploitation</span>
-        </h3>
-        <p class="text-[11px] text-[#888] mb-3">Enregistrez chaque achat pour un calcul exact de la marge nette.</p>
-        
+        <h3 class="text-sm font-bold text-white mb-2">Ajouter une Dépense</h3>
         <div class="space-y-2 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Motif / Justification *</label>
-            <input id="exp-label" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Achat chaux éteinte 25kg">
+            <label class="text-[#888] block mb-1">Motif / Justification</label>
+            <input id="exp-label" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Facture électricité chambre">
           </div>
           <div>
-            <label class="text-[#888] block mb-1">Montant en Dinars (DA) *</label>
-            <input id="exp-amount" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-base font-bold" placeholder="ex: 1500">
+            <label class="text-[#888] block mb-1">Montant en Dinars (DA)</label>
+            <input id="exp-amount" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" placeholder="2500">
           </div>
           <div>
             <label class="text-[#888] block mb-1">Catégorie</label>
             <select id="exp-cat" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
-              <option value="Matière première">Matière première (Paille / Mycélium)</option>
+              <option value="Matière première">Matière première (Paille/Mycélium)</option>
               <option value="Sanitation">Désinfection & Alcool</option>
-              <option value="Énergie">Électricité / Gaz / Eau</option>
-              <option value="Consommables">Sacs micro-perforés & scotch</option>
-              <option value="Transport">Carburant livraison</option>
-              <option value="Autre">Autre charge</option>
+              <option value="Énergie">Électricité / Eau</option>
+              <option value="Transport">Carburant</option>
+              <option value="Consommables">Sacs micro-perforés</option>
             </select>
           </div>
           <div class="pt-3 flex gap-2">
@@ -1045,19 +1556,15 @@
       const label = document.getElementById('exp-label').value.trim();
       const amount = parseFloat(document.getElementById('exp-amount').value) || 0;
       const category = document.getElementById('exp-cat').value;
-      if (!label || amount <= 0) return alert('Veuillez renseigner le motif et un montant valide.');
+      if (!label || amount <= 0) return alert('Motif et montant requis.');
 
       state.expenses.unshift({
-        id: 'exp_' + Date.now(),
-        label,
-        amount,
-        category,
+        id: 'exp_' + Date.now(), label, amount, category,
         date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
       });
-
       saveState();
       closeModal();
-      showToast('Dépense enregistrée !');
+      showToast('Dépense ajoutée !');
     }
 
     function deleteExpense(id) {
@@ -1068,182 +1575,28 @@
       }
     }
 
-    // ==========================================
-    // 6. NOUVELLE VENTE / LIVRAISON
-    // ==========================================
-    function openNewSaleModal(preselectedClientId = null) {
-      showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>🛒</span> <span>Créer une Vente & Livraison</span>
-        </h3>
-        
-        <div class="space-y-2 text-xs">
-          <div>
-            <label class="text-[#888] block mb-1">Sélectionner le Client *</label>
-            <select id="sale-client-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="updateSalePriceHelper()">
-              ${state.clients.map(c => `
-                <option value="${c.id}" ${c.id === preselectedClientId ? 'selected' : ''}>
-                  ${c.name} (${c.price} DA/kg)
-                </option>
-              `).join('')}
-            </select>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-[#888] block mb-1">Quantité (kg) *</label>
-              <input id="sale-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5.0" oninput="updateSalePriceHelper()">
-            </div>
-            <div>
-              <label class="text-[#888] block mb-1">Frais Livreur (DA)</label>
-              <input id="sale-fee" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="350">
-            </div>
-          </div>
-          <div id="sale-summary-box" class="bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d] text-xs">
-            <!-- Dynamically calculated -->
-          </div>
-          <div class="pt-2 flex gap-2">
-            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="saveNewDelivery()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider la Vente</button>
-          </div>
-        </div>
-      `);
-      updateSalePriceHelper();
-    }
-
-    function updateSalePriceHelper() {
-      const cliId = document.getElementById('sale-client-id').value;
-      const client = state.clients.find(c => c.id === cliId);
-      const qty = parseFloat(document.getElementById('sale-qty').value) || 0;
-      if (!client) return;
-
-      const total = qty * client.price;
-      document.getElementById('sale-summary-box').innerHTML = `
-        <div class="flex justify-between text-[#aaa]"><span>Tarif unitaire :</span> <span class="text-white">${client.price} DA/kg</span></div>
-        <div class="flex justify-between text-[#aaa] mt-1"><span>Total à encaisser :</span> <strong class="text-[#7bc67e] text-sm">${total.toLocaleString()} DA</strong></div>
-      `;
-    }
-
-    function saveNewDelivery() {
-      const cliId = document.getElementById('sale-client-id').value;
-      const client = state.clients.find(c => c.id === cliId);
-      const qty = parseFloat(document.getElementById('sale-qty').value) || 0;
-      const fee = parseFloat(document.getElementById('sale-fee').value) || 0;
-
-      if (!client || qty <= 0) return alert('Veuillez saisir une quantité valide.');
-
-      state.deliveries.unshift({
-        id: 'deliv_' + Date.now(),
-        num: 'LIV-' + String(state.deliveries.length + 1).padStart(3, '0'),
-        clientName: client.name,
-        phone: client.phone,
-        address: client.address,
-        qty: qty,
-        price: client.price,
-        fee: fee,
-        status: 'pending'
-      });
-
-      saveState();
-      closeModal();
-      showToast(`Vente créée pour ${client.name} !`);
-    }
-
-    // ==========================================
-    // 7. VUE DU LIVREUR (ISOLATION STRICTE)
-    // ==========================================
-    function renderDeliveryView() {
-      const container = document.getElementById('app-content');
-      container.innerHTML = `
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase">🚚 Mes Courses Assignées</h2>
-          <span class="text-[10px] text-[#888]">${state.deliveries.length} livraisons</span>
-        </div>
-
-        <div class="space-y-3">
-          ${state.deliveries.map(d => {
-            const isConf = d.status === 'confirmed';
-            return `
-              <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border ${isConf ? 'border-[#4a9e4e]' : 'border-[#2d4a2d]'} space-y-2.5">
-                <div class="flex justify-between items-center">
-                  <span class="text-xs text-[#888] font-bold font-mono">${d.num}</span>
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isConf ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40'}">
-                    ${isConf ? '✅ Livré & Encaissé' : '⏳ En cours'}
-                  </span>
-                </div>
-
-                <div>
-                  <h3 class="font-bold text-white text-sm">${d.clientName}</h3>
-                  <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">🍄 ${d.qty} kg de pleurotes frais</p>
-                  <p class="text-xs text-[#aaa] mt-1">📍 ${d.address}</p>
-                </div>
-
-                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs flex justify-between">
-                  <span class="text-[#888]">Rémunération course :</span>
-                  <strong class="text-white text-sm">${d.fee} DA</strong>
-                </div>
-
-                ${!isConf ? `
-                  <div class="grid grid-cols-2 gap-2 pt-1">
-                    <a href="tel:${d.phone}" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow">
-                      <span>📞</span> Appeler Client
-                    </a>
-                    <button onclick="alert('Itinéraire GPS vers : ' + '${d.address}')" class="py-2.5 bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
-                      <span>🗺️</span> GPS
-                    </button>
-                  </div>
-                  <button onclick="confirmDelivery('${d.id}')" class="w-full py-2.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40 font-bold rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-[#2e522e]">
-                    <span>✅</span> Confirmer Livraison effectuée
-                  </button>
-                ` : `
-                  <div class="text-center py-1 text-xs text-[#7bc67e] font-bold">
-                    ✓ Course complétée
-                  </div>
-                `}
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
-    }
-
-    function confirmDelivery(id) {
-      const d = state.deliveries.find(x => x.id === id);
-      if (d) {
-        d.status = 'confirmed';
-        saveState();
-        showToast('Livraison validée avec succès !');
-      }
-    }
-
-    // ==========================================
-    // SCANNER QR SIMULÉ
-    // ==========================================
-    function openScanModal() {
-      showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 text-center">📷 Scanner QR Sac de Culture</h3>
-        <p class="text-xs text-[#888] text-center mb-3">Sélectionnez un sac pour simuler le scan de son QR code :</p>
-        <div class="space-y-2 max-h-60 overflow-y-auto">
-          ${state.bags.map(b => `
-            <button onclick="closeModal(); switchTab('bags'); showToast('Sac scanné : ' + '${b.id}');" class="w-full text-left bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center hover:border-[#7bc67e]">
-              <div>
-                <span class="font-mono text-white font-bold">${b.id}</span>
-                <span class="text-[10px] text-[#888] block">${b.strain} • ${b.weight}kg</span>
-              </div>
-              <span class="text-[#7bc67e] font-bold text-[10px]">${b.status}</span>
-            </button>
-          `).join('')}
-        </div>
-        <button onclick="closeModal()" class="w-full mt-3 py-2.5 bg-[#2d4a2d] rounded-xl text-white text-xs font-bold">Fermer</button>
-      `);
-    }
-
-    // Helpers Modal
+    // Modal Helpers
     function showModal(content) {
       document.getElementById('modal-container').innerHTML = content;
       document.getElementById('modal-backdrop').classList.remove('hidden');
     }
     function closeModal() {
       document.getElementById('modal-backdrop').classList.add('hidden');
+    }
+
+    function openScanModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 text-center">📷 Scanner QR Sac</h3>
+        <div class="space-y-2 max-h-60 overflow-y-auto">
+          ${state.bags.map(b => `
+            <button onclick="closeModal(); switchTab('bags'); showToast('Scan : ' + '${b.id}');" class="w-full text-left bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center hover:border-[#7bc67e]">
+              <span class="font-mono text-white font-bold">${b.id}</span>
+              <span class="text-[#7bc67e]">${b.status}</span>
+            </button>
+          `).join('')}
+        </div>
+        <button onclick="closeModal()" class="w-full mt-3 py-2.5 bg-[#2d4a2d] rounded-xl text-white text-xs font-bold">Fermer</button>
+      `);
     }
 
     function updateClock() {
@@ -1256,8 +1609,8 @@
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Démarrage initial
-    checkAlerts();
+    // Initialisation
+    checkBadges();
     setRole('admin');
   </script>
 </body>

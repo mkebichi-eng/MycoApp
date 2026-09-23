@@ -6,6 +6,7 @@ class ClientModel {
   final String address;
   final String city;
   final double presetPricePerKg; // Prix négocié par défaut en DA/kg
+  final double totalDue; // Reste à payer / Impayé du client en DA
   final bool isActive;
   final String notes;
   final DateTime createdAt;
@@ -18,6 +19,7 @@ class ClientModel {
     required this.address,
     this.city = '',
     required this.presetPricePerKg,
+    this.totalDue = 0.0,
     this.isActive = true,
     this.notes = '',
     required this.createdAt,
@@ -32,6 +34,7 @@ class ClientModel {
       address: map['address'] as String? ?? '',
       city: map['city'] as String? ?? '',
       presetPricePerKg: (map['presetPricePerKg'] as num?)?.toDouble() ?? 0.0,
+      totalDue: (map['totalDue'] as num?)?.toDouble() ?? 0.0,
       isActive: map['isActive'] as bool? ?? true,
       notes: map['notes'] as String? ?? '',
       createdAt: map['createdAt'] != null
@@ -49,6 +52,7 @@ class ClientModel {
       'address': address,
       'city': city,
       'presetPricePerKg': presetPricePerKg,
+      'totalDue': totalDue,
       'isActive': isActive,
       'notes': notes,
       'createdAt': createdAt.toIso8601String(),
@@ -62,6 +66,7 @@ class ClientModel {
     String? address,
     String? city,
     double? presetPricePerKg,
+    double? totalDue,
     bool? isActive,
     String? notes,
   }) {
@@ -73,6 +78,7 @@ class ClientModel {
       address: address ?? this.address,
       city: city ?? this.city,
       presetPricePerKg: presetPricePerKg ?? this.presetPricePerKg,
+      totalDue: totalDue ?? this.totalDue,
       isActive: isActive ?? this.isActive,
       notes: notes ?? this.notes,
       createdAt: createdAt,
