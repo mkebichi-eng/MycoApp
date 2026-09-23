@@ -3,21 +3,24 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialisation sécurisée de Firebase avec persistance offline
+  // Initialisation officielle de Firebase avec persistance offline
   try {
-    await Firebase.initializeApp();
-    // Activation de la persistance offline de Firestore pour les zones à faible couverture réseau
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // Activation de la persistance offline illimitée pour les zones agricoles à faible connectivité
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
+    debugPrint('Firebase initialisé avec succès sur le projet : ${DefaultFirebaseOptions.currentPlatform.projectId}');
   } catch (e) {
-    // Mode de repli (développement local ou premier démarrage avant injection des clés de production)
-    debugPrint('Firebase initialisé en mode local de démonstration : $e');
+    debugPrint('Mode de secours local : $e');
   }
 
   runApp(
