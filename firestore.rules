@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // FONCTIONS D'AUTHENTIFICATION ET DE RÔLES
+    // ==========================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      // Priorité au custom claim s'il existe, sinon fallback sécurisé sur le document user
+      return request.auth.token.role != null ? request.auth.token.role : getUserData().role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isProductionManager() {
+      return isAuthenticated() && getUserRole() == 'production_manager';
+    }
+
+    function isManagement() {
+      return isAdmin() || isProductionManager();
+    }
+
+    function isDeliveryPerson() {
+      return isAuthenticated() && getUserRole() == 'delivery_person';
+    }
+
+    // ==========================================
+    // 1. UTILISATEURS (users)
+    // ==========================================
+    // Tout utilisateur peut lire son profil pour connaître son rôle
+    // Seul l'admin peut créer ou modifier les profils et attribuer les rôles
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isManagement());
+      allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.keys().hasAny(['role']));
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 2. PRODUCTION (batches & bags)
+    // ==========================================
+    // Réservé à l'Admin et au Responsable de Production
+    match /batches/{batchId} {
+      allow read, write: if isManagement();
+    }
+
+    match /bags/{bagId} {
+      allow read, write: if isManagement();
+    }
+
+    // ==========================================
+    // 3. CLIENTS (clients)
+    // ==========================================
+    // La gestion a tous les droits
+    // Les livreurs peuvent lire les coordonnées nécessaires aux livraisons
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow write: if isManagement();
+    }
+
+    // ==========================================
+    // 4. LIVREURS (delivery_persons)
+    // ==========================================
+    match /delivery_persons/{personId} {
+      allow read: if isAuthenticated();
+      allow write: if isManagement();
+    }
+
+    // ==========================================
+    // 5. LIVRAISONS (deliveries)
+    // ==========================================
+    // Le livreur ne peut lire QUE ses propres livraisons
+    // Il ne peut mettre à jour QUE le statut, les notes et la date de livraison
+    match /deliveries/{deliveryId} {
+      allow read: if isManagement() || (isDeliveryPerson() && resource.data.deliveryPersonId == request.auth.uid);
+      allow create, delete: if isManagement();
+      allow update: if isManagement() || 
+        (isDeliveryPerson() && 
+         resource.data.deliveryPersonId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveredAt', 'deliveryNotes', 'updatedAt']));
+    }
+
+    // ==========================================
+    // 6. VENTES & MARGES (sales)
+    // ==========================================
+    // STRICTEMENT INTERDIT AUX LIVREURS
+    // Seuls l'Admin et le Responsable de Production peuvent lire et écrire
+    match /sales/{saleId} {
+      allow read, write: if isManagement();
+    }
+
+    // ==========================================
+    // 7. STOCKS & MOUVEMENTS (inventory_items & inventory_movements)
+    // ==========================================
+    // Gestion du stock réservée à l'Admin et Responsable de Production
+    match /inventory_items/{itemId} {
+      allow read, write: if isManagement();
+    }
+
+    match /inventory_movements/{movementId} {
+      allow read, write: if isManagement();
+    }
+
+    // ==========================================
+    // 8. JOURNAL D'AUDIT (audit_logs)
+    // ==========================================
+    // Écriture pour tracer l'activité, lecture réservée à l'Admin
+    // Inaltérable : update et delete interdits pour tout le monde
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+  }
+}
