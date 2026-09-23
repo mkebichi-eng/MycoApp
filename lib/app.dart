@@ -17,24 +17,34 @@ class MycoApp extends ConsumerWidget {
     return MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppConstants.primaryGreen,
-          primary: AppConstants.primaryGreen,
-          secondary: AppConstants.secondaryGreen,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: AppConstants.backgroundDark,
+        cardColor: AppConstants.cardDark,
+        colorScheme: const ColorScheme.dark(
+          primary: AppConstants.accentGreen,
+          secondary: AppConstants.primaryGreen,
+          surface: AppConstants.cardDark,
+          background: AppConstants.backgroundDark,
         ),
-        fontFamily: 'Roboto',
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppConstants.backgroundDark,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: AppConstants.cardDark,
+          selectedItemColor: AppConstants.accentGreen,
+          unselectedItemColor: Color(0xFF666666),
+        ),
       ),
-      // Préparation de l'internationalisation FR & AR (RTL ready)
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('fr', 'FR'), // Français par défaut
-        Locale('ar', 'DZ'), // Arabe pour adaptation locale
+        Locale('fr', 'FR'),
+        Locale('ar', 'DZ'),
       ],
       locale: const Locale('fr', 'FR'),
       home: authState.when(
@@ -42,17 +52,22 @@ class MycoApp extends ConsumerWidget {
           if (user == null) {
             return const LoginScreen();
           }
-          // Redirection stricte par rôle
           if (user.role == UserRole.deliveryPerson) {
             return const DeliveryPersonScreen();
           }
           return const MainDashboardScreen();
         },
         loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          backgroundColor: AppConstants.backgroundDark,
+          body: Center(
+            child: CircularProgressIndicator(color: AppConstants.accentGreen),
+          ),
         ),
         error: (err, stack) => Scaffold(
-          body: Center(child: Text('Erreur d\'initialisation : $err')),
+          backgroundColor: AppConstants.backgroundDark,
+          body: Center(
+            child: Text('Erreur : $err', style: const TextStyle(color: Colors.red)),
+          ),
         ),
       ),
     );

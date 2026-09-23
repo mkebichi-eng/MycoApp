@@ -4,22 +4,25 @@ class AppConstants {
   // Devise par défaut
   static const String currency = 'DA';
   static const String appName = 'MycoApp';
-  static const String farmSubtitle = 'Ferme de Pleurotes';
+  static const String farmSubtitle = 'Gestion d\'exploitation mycologique';
 
-  // Paramètres mycologiques par défaut
-  static const double targetSpawnRatioMin = 3.0; // 3% de blanc de grain minimum
-  static const double targetSpawnRatioMax = 5.0; // 5% conseillé
-  static const int averageIncubationDays = 18; // 14 à 21 jours typique pour Pleurotus ostreatus
-  static const double standardBagWeightKg = 5.0; // sac standard 5 kg
+  // Charte graphique MycoTrack (Dark Forest & Mycelium Accent)
+  static const Color backgroundDark = Color(0xFF0F1A0F); // Fond principal noir teinté vert
+  static const Color cardDark = Color(0xFF1A2A1A); // Fond des cartes
+  static const Color borderDark = Color(0xFF2D4A2D); // Bordures fines
+  static const Color accentGreen = Color(0xFF7BC67E); // Vert mycélium éclatant
+  static const Color primaryGreen = Color(0xFF4A9E4E); // Vert action
+  static const Color alertRed = Color(0xFFE07A7A); // Rouge contamination / stock bas
+  static const Color alertYellow = Color(0xFFE0B87A); // Jaune ambre en attente
+  static const Color textMuted = Color(0xFF888888);
+  static const Color textSub = Color(0xFF666666);
+  static const Color textWhite = Color(0xFFFFFFFF);
 
-  // Couleurs de l'application
-  static const Color primaryGreen = Color(0xFF1B5E20); // Vert forêt profond
-  static const Color secondaryGreen = Color(0xFF4CAF50); // Vert feuille
-  static const Color accentGold = Color(0xFFFFB300); // Jaune paille doré
-  static const Color alertRed = Color(0xFFD32F2F); // Rouge contamination / stock bas
-  static const Color darkBackground = Color(0xFF121212);
-  static const Color cardBackground = Color(0xFFFFFFFF);
-  static const Color lightGrey = Color(0xFFF5F7FA);
+  // Paramètres mycologiques
+  static const double targetSpawnRatioMin = 3.0; // 3%
+  static const double targetSpawnRatioMax = 5.0; // 5%
+  static const int averageIncubationDays = 18;
+  static const double standardBagWeightKg = 5.0;
 }
 
 enum UserRole {
@@ -32,9 +35,9 @@ enum UserRole {
       case UserRole.admin:
         return 'admin';
       case UserRole.productionManager:
-        return 'production_manager';
+        return 'operator'; // Alignement avec MycoTrack 'operator'
       case UserRole.deliveryPerson:
-        return 'delivery_person';
+        return 'viewer'; // Alignement avec MycoTrack 'viewer' (livreur)
     }
   }
 
@@ -43,7 +46,7 @@ enum UserRole {
       case UserRole.admin:
         return 'Administrateur';
       case UserRole.productionManager:
-        return 'Responsable de Production';
+        return 'Opérateur / Responsable';
       case UserRole.deliveryPerson:
         return 'Livreur';
     }
@@ -53,8 +56,10 @@ enum UserRole {
     switch (role) {
       case 'admin':
         return UserRole.admin;
+      case 'operator':
       case 'production_manager':
         return UserRole.productionManager;
+      case 'viewer':
       case 'delivery_person':
       default:
         return UserRole.deliveryPerson;
@@ -72,53 +77,68 @@ enum BatchStatus {
   String get label {
     switch (this) {
       case BatchStatus.preparation:
-        return 'En préparation (Pasteurisation)';
+        return '🧪 Ensemencement';
       case BatchStatus.incubating:
-        return 'Incubation en cours';
+        return '🌡️ Incubation';
       case BatchStatus.fruiting:
-        return 'Fructification active';
+        return '🍄 Fructification';
       case BatchStatus.completed:
-        return 'Cycle terminé';
+        return '✅ Terminé';
       case BatchStatus.cancelled:
-        return 'Annulé / Rebuté';
+        return '☣️ Annulé';
     }
   }
 }
 
 enum BagStatus {
-  incubating,
+  inoculation,
+  incubation,
   fruiting,
-  harvested,
-  contaminated,
-  discarded;
+  done,
+  contaminated;
 
   String get label {
     switch (this) {
-      case BagStatus.incubating:
+      case BagStatus.inoculation:
+        return 'Ensemencement';
+      case BagStatus.incubation:
         return 'Incubation';
       case BagStatus.fruiting:
         return 'Fructification';
-      case BagStatus.harvested:
-        return 'Récolté (Vagues terminées)';
+      case BagStatus.done:
+        return 'Terminé';
       case BagStatus.contaminated:
         return 'Contaminé';
-      case BagStatus.discarded:
-        return 'Écarté / Jeté';
+    }
+  }
+
+  String get emoji {
+    switch (this) {
+      case BagStatus.inoculation:
+        return '🧪';
+      case BagStatus.incubation:
+        return '🌡️';
+      case BagStatus.fruiting:
+        return '🍄';
+      case BagStatus.done:
+        return '✅';
+      case BagStatus.contaminated:
+        return '☣️';
     }
   }
 
   Color get color {
     switch (this) {
-      case BagStatus.incubating:
-        return Colors.blueGrey;
+      case BagStatus.inoculation:
+        return const Color(0xFF7AB8E0); // Bleu clair
+      case BagStatus.incubation:
+        return const Color(0xFFE0C87A); // Jaune ambré
       case BagStatus.fruiting:
-        return Colors.green;
-      case BagStatus.harvested:
-        return Colors.teal;
+        return const Color(0xFF7BC67E); // Vert mycélium
+      case BagStatus.done:
+        return const Color(0xFF888888); // Gris
       case BagStatus.contaminated:
-        return Colors.red;
-      case BagStatus.discarded:
-        return Colors.grey;
+        return const Color(0xFFE07A7A); // Rouge
     }
   }
 }
@@ -136,42 +156,48 @@ enum ContaminationType {
       case ContaminationType.neurospora:
         return 'Moisissure orange (Neurospora)';
       case ContaminationType.bacteria:
-        return 'Tache bactérienne (Bacillus / Flétrissement)';
+        return 'Tache bactérienne (Bacillus)';
       case ContaminationType.other:
-        return 'Autre altération / Parasite';
+        return 'Autre altération';
     }
   }
 }
 
 enum DeliveryStatus {
   pending,
-  inTransit,
-  delivered,
-  cancelled;
+  confirmed,
+  denied;
 
   String get label {
     switch (this) {
       case DeliveryStatus.pending:
-        return 'En attente';
-      case DeliveryStatus.inTransit:
-        return 'En cours de livraison';
-      case DeliveryStatus.delivered:
-        return 'Livré avec succès';
-      case DeliveryStatus.cancelled:
-        return 'Annulée';
+        return '⏳ En attente de confirmation';
+      case DeliveryStatus.confirmed:
+        return '✅ Confirmée / Livrée';
+      case DeliveryStatus.denied:
+        return '❌ Refusée';
     }
   }
 
   Color get color {
     switch (this) {
       case DeliveryStatus.pending:
-        return Colors.orange;
-      case DeliveryStatus.inTransit:
-        return Colors.blue;
-      case DeliveryStatus.delivered:
-        return Colors.green;
-      case DeliveryStatus.cancelled:
-        return Colors.red;
+        return const Color(0xFFE0B87A);
+      case DeliveryStatus.confirmed:
+        return const Color(0xFF7BC67E);
+      case DeliveryStatus.denied:
+        return const Color(0xFFE07A7A);
+    }
+  }
+
+  Color get bg {
+    switch (this) {
+      case DeliveryStatus.pending:
+        return const Color(0xFF3A2E1A);
+      case DeliveryStatus.confirmed:
+        return const Color(0xFF1F3A1F);
+      case DeliveryStatus.denied:
+        return const Color(0xFF3A1A1A);
     }
   }
 }
@@ -186,9 +212,9 @@ enum PaymentStatus {
       case PaymentStatus.paid:
         return 'Payé';
       case PaymentStatus.pending:
-        return 'En attente de paiement';
+        return 'En attente';
       case PaymentStatus.partial:
-        return 'Paiement partiel';
+        return 'Partiel';
     }
   }
 }

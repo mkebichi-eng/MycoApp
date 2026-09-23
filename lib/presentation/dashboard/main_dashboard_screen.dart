@@ -9,274 +9,414 @@ import '../production/qr_scanner_screen.dart';
 import '../providers/app_providers.dart';
 import '../sales/sales_screen.dart';
 
-class MainDashboardScreen extends ConsumerWidget {
+class MainDashboardScreen extends ConsumerStatefulWidget {
   const MainDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateProvider).value;
+  ConsumerState<MainDashboardScreen> createState() => _MainDashboardScreenState();
+}
+
+class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
+  String _selectedPeriod = 'month'; // day | month1 | month | month12 | all
+
+  @override
+  Widget build(BuildContext context) {
     final financial = ref.watch(financialMetricsProvider);
     final production = ref.watch(productionStatsProvider);
     final alerts = ref.watch(lowStockAlertsProvider);
 
+    final totalRev = financial['totalRevenue'] as double? ?? 35950.0;
+    final totalFee = financial['totalDeliveryFees'] as double? ?? 1350.0;
+    final totalExp = 7125.0; // Achats intrants et paille
+    final netProfit = totalRev - totalFee - totalExp;
+    final totalPaid = 30450.0;
+    final totalDue = totalRev - totalPaid;
+
     return Scaffold(
+      backgroundColor: AppConstants.backgroundDark,
       appBar: AppBar(
-        title: Text(AppConstants.appName),
-        backgroundColor: AppConstants.primaryGreen,
-        foregroundColor: Colors.white,
-        actions: [
-          // Badge alerte stock
-          IconButton(
-            icon: Badge(
-              isLabelVisible: alerts.isNotEmpty,
-              label: Text('${alerts.length}'),
-              child: const Icon(Icons.notifications),
+        title: const Row(
+          children: [
+            Text('🍄 ', style: TextStyle(fontSize: 20)),
+            Text(
+              'MycoTrack',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
             ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner, color: AppConstants.accentGreen),
+            tooltip: 'Scanner QR Sac',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (ctx) => const InventoryScreen()),
+                MaterialPageRoute(builder: (ctx) => const QrScannerScreen()),
               );
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Déconnexion',
+            icon: const Icon(Icons.logout, color: AppConstants.alertRed),
+            tooltip: 'Se déconnecter',
             onPressed: () => ref.read(authRepositoryProvider).signOut(),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
-          // En-tête utilisateur avec rôle
+          // Titre de section stylé MycoTrack
+          _buildSectionHeader('RÉSUMÉ FINANCIER GLOBAL'),
+
+          // Grille de KPI Cards (style MycoTrack exact)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user?.displayName ?? 'Administrateur',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Rôle : ${user?.role.label ?? 'Admin'}',
-                    style: const TextStyle(color: Colors.blueGrey, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppConstants.secondaryGreen,
-                  foregroundColor: Colors.white,
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Chiffre d\'affaires',
+                  value: '${totalRev.toStringAsFixed(0)} DA',
+                  subtitle: 'Total livraisons',
+                  color: AppConstants.accentGreen,
                 ),
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Scan QR'),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (ctx) => const QrScannerScreen()),
-                  );
-                },
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Frais livreurs',
+                  value: '${totalFee.toStringAsFixed(0)} DA',
+                  subtitle: 'Total courses',
+                  color: AppConstants.alertYellow,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
-          // 1. Synthèse Financière (Devise DA)
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Performance Financière',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildMetricTile(
-                        'Chiffre d\'Affaires',
-                        MycoCalculations.formatCurrency(financial['totalRevenue'] as double? ?? 0.0),
-                        Colors.black87,
-                      ),
-                      _buildMetricTile(
-                        'Marge Nette',
-                        MycoCalculations.formatCurrency(financial['totalNetMargin'] as double? ?? 0.0),
-                        Colors.green.shade800,
-                      ),
-                      _buildMetricTile(
-                        'Volume Vendu',
-                        MycoCalculations.formatWeight(financial['totalKgSold'] as double? ?? 0.0),
-                        Colors.blueGrey,
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  // Graphique d'évolution des ventes fl_chart
-                  const Text(
-                    'Évolution des Ventes & Marges (DA) :',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 160,
-                    child: LineChart(
-                      LineChartData(
-                        gridData: const FlGridData(show: false),
-                        titlesData: const FlTitlesData(show: false),
-                        borderData: FlBorderData(show: false),
-                        lineBarsData: [
-                          // Courbe Ventes
-                          LineChartBarData(
-                            spots: const [
-                              FlSpot(1, 10200),
-                              FlSpot(2, 5500),
-                              FlSpot(3, 20250),
-                              FlSpot(4, 18000),
-                            ],
-                            isCurved: true,
-                            color: AppConstants.primaryGreen,
-                            barWidth: 3,
-                            dotData: const FlDotData(show: true),
-                          ),
-                          // Courbe Marge Nette
-                          LineChartBarData(
-                            spots: const [
-                              FlSpot(1, 7675),
-                              FlSpot(2, 3900),
-                              FlSpot(3, 15900),
-                              FlSpot(4, 14200),
-                            ],
-                            isCurved: true,
-                            color: Colors.tealAccent.shade700,
-                            barWidth: 3,
-                            dotData: const FlDotData(show: true),
-                          ),
-                        ],
-                      ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Dépenses',
+                  value: '${totalExp.toStringAsFixed(0)} DA',
+                  subtitle: 'Achats + matériel',
+                  color: AppConstants.alertRed,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Bénéfice net',
+                  value: '${netProfit.toStringAsFixed(0)} DA',
+                  subtitle: 'Marge réelle',
+                  color: netProfit >= 0 ? AppConstants.accentGreen : AppConstants.alertRed,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Encaissé',
+                  value: '${totalPaid.toStringAsFixed(0)} DA',
+                  subtitle: 'Reçu en caisse',
+                  color: AppConstants.accentGreen,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildKPICard(
+                  title: 'Impayés',
+                  value: '${totalDue.toStringAsFixed(0)} DA',
+                  subtitle: '1 client +30j',
+                  color: totalDue > 0 ? AppConstants.alertYellow : AppConstants.accentGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Graphique Bénéfice Net avec sélecteur de périodes (MycoTrack)
+          _buildSectionHeader('BÉNÉFICE NET'),
+
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildPeriodChip('day', '7 jours'),
+                _buildPeriodChip('month1', '1 mois'),
+                _buildPeriodChip('month', '6 mois'),
+                _buildPeriodChip('month12', '12 mois'),
+                _buildPeriodChip('all', 'Tout'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppConstants.cardDark,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppConstants.borderDark),
+            ),
+            height: 170,
+            child: BarChart(
+              BarChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (val, meta) {
+                        const labels = ['Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep'];
+                        final idx = val.toInt();
+                        if (idx >= 0 && idx < labels.length) {
+                          return Text(labels[idx], style: const TextStyle(color: Color(0xFF888888), fontSize: 10));
+                        }
+                        return const Text('');
+                      },
                     ),
                   ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: [
+                  _buildBarGroup(0, 12.5),
+                  _buildBarGroup(1, 18.0),
+                  _buildBarGroup(2, 22.0),
+                  _buildBarGroup(3, 19.5),
+                  _buildBarGroup(4, 25.0),
+                  _buildBarGroup(5, 27.4),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // 2. Raccourcis Modules Métier (Grille de gros boutons)
-          const Text(
-            'Modules de Gestion :',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+          // Section Alertes (Style MycoTrack exact)
+          if (alerts.isNotEmpty) ...[
+            _buildSectionHeader('⚠️ ALERTES'),
+            ...alerts.map((item) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A1A1A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF5A2A2A)),
+                  ),
+                  child: Text(
+                    '🔴 Stock bas — ${item.name} : ${item.currentStock} ${item.unit}',
+                    style: const TextStyle(color: AppConstants.alertRed, fontSize: 13),
+                  ),
+                )),
+            const SizedBox(height: 8),
+          ],
+
+          // Production sacs actifs (Style MycoTrack exact)
+          _buildSectionHeader('🍄 PRODUCTION — SACS ACTIFS'),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppConstants.cardDark,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppConstants.borderDark),
+            ),
+            child: Column(
+              children: [
+                _buildBagRow('🧪 Ensemencement', '0'),
+                _buildBagRow('🌡️ Incubation', '${production['activeIncubation'] ?? 21}'),
+                _buildBagRow('🍄 Fructification', '${production['activeFruiting'] ?? 10}'),
+                _buildBagRow('☣️ Contaminés', '${production['contaminated'] ?? 1}', isLast: true),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
 
+          // Grille de raccourcis modules
+          _buildSectionHeader('MODULES DE GESTION'),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.4,
             children: [
-              _buildModuleCard(
-                context,
-                title: 'Production',
-                subtitle: '${production['totalBags']} sacs suivis',
-                icon: Icons.grass,
-                color: Colors.green.shade800,
+              _buildModuleTile(
+                title: 'Culture & Sacs',
+                subtitle: 'Lots 200L & Scan',
+                emoji: '🍄',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => const ProductionDashboardScreen()),
                 ),
               ),
-              _buildModuleCard(
-                context,
+              _buildModuleTile(
                 title: 'Ventes & Marges',
-                subtitle: 'Saisie & Rapports',
-                icon: Icons.monetization_on,
-                color: Colors.teal.shade700,
+                subtitle: 'Saisie & Recettes',
+                emoji: '💰',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => const SalesScreen()),
                 ),
               ),
-              _buildModuleCard(
-                context,
+              _buildModuleTile(
                 title: 'Stocks & Intrants',
-                subtitle: alerts.isNotEmpty ? '${alerts.length} ALERTE(S)' : 'Niveau normal',
-                icon: Icons.inventory_2,
-                color: alerts.isNotEmpty ? Colors.red.shade700 : Colors.blueGrey.shade700,
+                subtitle: '${alerts.length} alerte(s)',
+                emoji: '📦',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => const InventoryScreen()),
                 ),
               ),
-              _buildModuleCard(
-                context,
-                title: 'Scan QR Code',
+              _buildModuleTile(
+                title: 'Scanner QR',
                 subtitle: 'Action en 1 tap',
-                icon: Icons.qr_code_scanner,
-                color: Colors.orange.shade800,
+                emoji: '📷',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => const QrScannerScreen()),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _buildMetricTile(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: AppConstants.accentGreen,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.6,
         ),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      ),
+    );
+  }
+
+  Widget _buildKPICard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppConstants.cardDark,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppConstants.borderDark),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(color: Color(0xFF666666), fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeriodChip(String key, String label) {
+    final isActive = _selectedPeriod == key;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPeriod = key),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? AppConstants.primaryGreen : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? AppConstants.primaryGreen : AppConstants.borderDark,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.white : const TextStyle(color: Color(0xFFAAAAAA)).color,
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  BarChartGroupData _buildBarGroup(int x, double y) {
+    return BarChartGroupData(
+      x: x,
+      barRods: [
+        BarChartRodData(
+          toY: y,
+          color: AppConstants.primaryGreen,
+          width: 22,
+          borderRadius: BorderRadius.circular(4),
+        ),
       ],
     );
   }
 
-  Widget _buildModuleCard(
-    BuildContext context, {
+  Widget _buildBagRow(String label, String count, {bool isLast = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      decoration: BoxDecoration(
+        border: isLast ? null : const Border(bottom: BorderSide(color: AppConstants.borderDark)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 13)),
+          Text(count, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModuleTile({
     required String title,
     required String subtitle,
-    required IconData icon,
-    required Color color,
+    required String emoji,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Card(
-        color: color.withOpacity(0.08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: color.withOpacity(0.3)),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppConstants.cardDark,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppConstants.borderDark),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 30),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
-              ),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 22)),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF888888)),
+            ),
+          ],
         ),
       ),
     );

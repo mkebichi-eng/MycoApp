@@ -55,7 +55,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppConstants.lightGrey,
+      backgroundColor: AppConstants.backgroundDark,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -63,159 +63,167 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // En-tête mycologique
+                // En-tête MycoTrack
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppConstants.primaryGreen.withOpacity(0.1),
+                    color: AppConstants.cardDark,
                     shape: BoxShape.circle,
+                    border: Border.all(color: AppConstants.borderDark),
                   ),
-                  child: const Icon(
-                    Icons.eco,
-                    size: 64,
-                    color: AppConstants.primaryGreen,
-                  ),
+                  child: const Text('🍄', style: TextStyle(fontSize: 48)),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  AppConstants.appName,
+                  'MycoTrack',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
-                    color: AppConstants.primaryGreen,
+                    color: Colors.white,
                   ),
                 ),
                 const Text(
                   AppConstants.farmSubtitle,
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  style: TextStyle(fontSize: 13, color: Color(0xFF888888)),
                 ),
                 const SizedBox(height: 32),
 
-                // Formulaire de connexion
-                Card(
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(
+                // Carte formulaire style sombre MycoTrack
+                Container(
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: BoxDecoration(
+                    color: AppConstants.cardDark,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppConstants.borderDark),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Connexion à l\'exploitation',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Connexion',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
-                          const SizedBox(height: 20),
+                        ),
+                        const SizedBox(height: 18),
 
-                          if (_errorMessage != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: Text(
-                                _errorMessage!,
-                                style: TextStyle(color: Colors.red.shade800),
-                              ),
+                        if (_errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A1A1A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF5A2A2A)),
                             ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Adresse Email',
-                              prefixIcon: Icon(Icons.email_outlined),
-                              border: OutlineInputBorder(),
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: AppConstants.alertRed, fontSize: 13),
                             ),
-                            validator: (val) {
-                              if (val == null || val.isEmpty) {
-                                return 'Veuillez saisir votre adresse email.';
-                              }
-                              if (!val.contains('@')) {
-                                return 'Adresse email non valide.';
-                              }
-                              return null;
-                            },
                           ),
                           const SizedBox(height: 16),
-
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Mot de passe',
-                              prefixIcon: Icon(Icons.lock_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (val) {
-                              if (val == null || val.length < 6) {
-                                return 'Le mot de passe doit comporter au moins 6 caractères.';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-
-                          MycoButton(
-                            label: 'Se Connecter',
-                            icon: Icons.login,
-                            isLoading: _isLoading,
-                            onPressed: _handleLogin,
-                          ),
                         ],
-                      ),
+
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: 'Adresse Email',
+                            labelStyle: const TextStyle(color: Color(0xFF888888)),
+                            prefixIcon: const Icon(Icons.email_outlined, color: AppConstants.accentGreen),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: AppConstants.borderDark),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: AppConstants.accentGreen),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.isEmpty) return 'Veuillez saisir votre email.';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: 'Mot de passe',
+                            labelStyle: const TextStyle(color: Color(0xFF888888)),
+                            prefixIcon: const Icon(Icons.lock_outlined, color: AppConstants.accentGreen),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: AppConstants.borderDark),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: AppConstants.accentGreen),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.length < 6) return 'Minimum 6 caractères requis.';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 22),
+
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppConstants.primaryGreen,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: _isLoading ? null : _handleLogin,
+                          child: _isLoading
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('Se connecter', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 32),
-                const Divider(),
-                const SizedBox(height: 8),
+                const SizedBox(height: 24),
                 const Text(
-                  'Accès Rapide Test de Rôles (Mode Démo) :',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey),
+                  'Accès rapide par rôle (Mode Démo) :',
+                  style: TextStyle(color: Color(0xFF888888), fontSize: 12),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                // Boutons d'accès rapide par rôle
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
                     ActionChip(
-                      avatar: const Icon(Icons.admin_panel_settings, size: 18),
-                      label: const Text('Admin Ferme'),
-                      backgroundColor: Colors.blue.shade50,
-                      onPressed: () {
-                        ref.read(authRepositoryProvider).switchDemoRole(UserRole.admin);
-                      },
+                      avatar: const Icon(Icons.admin_panel_settings, size: 16, color: AppConstants.accentGreen),
+                      label: const Text('Admin', style: TextStyle(color: Colors.white, fontSize: 12)),
+                      backgroundColor: AppConstants.cardDark,
+                      side: const BorderSide(color: AppConstants.borderDark),
+                      onPressed: () => ref.read(authRepositoryProvider).switchDemoRole(UserRole.admin),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.grass, size: 18),
-                      label: const Text('Responsable Culture'),
-                      backgroundColor: Colors.green.shade50,
-                      onPressed: () {
-                        ref.read(authRepositoryProvider).switchDemoRole(UserRole.productionManager);
-                      },
+                      avatar: const Icon(Icons.grass, size: 16, color: AppConstants.accentGreen),
+                      label: const Text('Opérateur', style: TextStyle(color: Colors.white, fontSize: 12)),
+                      backgroundColor: AppConstants.cardDark,
+                      side: const BorderSide(color: AppConstants.borderDark),
+                      onPressed: () => ref.read(authRepositoryProvider).switchDemoRole(UserRole.productionManager),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.delivery_dining, size: 18),
-                      label: const Text('Livreur Terrain'),
-                      backgroundColor: Colors.orange.shade50,
-                      onPressed: () {
-                        ref.read(authRepositoryProvider).switchDemoRole(UserRole.deliveryPerson);
-                      },
+                      avatar: const Icon(Icons.delivery_dining, size: 16, color: AppConstants.alertYellow),
+                      label: const Text('Livreur', style: TextStyle(color: Colors.white, fontSize: 12)),
+                      backgroundColor: AppConstants.cardDark,
+                      side: const BorderSide(color: AppConstants.borderDark),
+                      onPressed: () => ref.read(authRepositoryProvider).switchDemoRole(UserRole.deliveryPerson),
                     ),
                   ],
                 ),
