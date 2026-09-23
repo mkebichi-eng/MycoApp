@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "886418118468",
+    "project_id": "mycoapp-ferme-69081",
+    "storage_bucket": "mycoapp-ferme-69081.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:886418118468:android:2ed58397e1d3ce58f42911",
+        "android_client_info": {
+          "package_name": "com.mycoapp.farm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5StGNbE15cDr7CmSOdcQZ0RHkOFFDhEI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
