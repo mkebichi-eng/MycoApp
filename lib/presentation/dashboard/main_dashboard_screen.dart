@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/myco_calculations.dart';
+import '../clients/clients_screen.dart';
 import '../inventory/inventory_screen.dart';
 import '../production/production_dashboard_screen.dart';
 import '../production/qr_scanner_screen.dart';
@@ -268,6 +269,14 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
                 emoji: '📦',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => const InventoryScreen()),
+                ),
+              ),
+              _buildModuleTile(
+                title: 'Clients & Tarifs',
+                subtitle: 'Ajout & Prix DA/kg',
+                emoji: '👤',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (ctx) => const ClientsScreen()),
                 ),
               ),
               _buildModuleTile(

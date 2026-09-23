@@ -188,4 +188,20 @@ class InventoryRepository {
           .set(movement.toMap());
     }
   }
+
+  Future<void> addItem(InventoryItemModel item) async {
+    if (_firestore != null) {
+      await _firestore.collection('inventory_items').doc(item.id).set(item.toMap());
+    }
+    _localItems.add(item);
+    _itemsController.add(List.unmodifiable(_localItems));
+  }
+
+  Future<void> deleteItem(String id) async {
+    if (_firestore != null) {
+      await _firestore.collection('inventory_items').doc(id).delete();
+    }
+    _localItems.removeWhere((i) => i.id == id);
+    _itemsController.add(List.unmodifiable(_localItems));
+  }
 }

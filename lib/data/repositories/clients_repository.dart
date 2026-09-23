@@ -97,4 +97,13 @@ class ClientsRepository {
       _clientsController.add(List.unmodifiable(_localClients));
     }
   }
+
+  Future<void> deleteClient(String id) async {
+    if (_firestore != null) {
+      // Désactivation logique pour garder l'intégrité de l'historique
+      await _firestore.collection('clients').doc(id).update({'isActive': false});
+    }
+    _localClients.removeWhere((c) => c.id == id);
+    _clientsController.add(List.unmodifiable(_localClients));
+  }
 }

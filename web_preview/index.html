@@ -2,11 +2,16 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MycoTrack - Simulateur Interactif</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>MycoTrack — Gestion Mycicole Complète</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
-    body { background-color: #050a05; color: #ffffff; }
+    body {
+      background-color: #050a05;
+      color: #ffffff;
+      -webkit-tap-highlight-color: transparent;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
     .bg-myco-dark { background-color: #0f1a0f; }
     .bg-myco-card { background-color: #1a2a1a; }
     .border-myco { border-color: #2d4a2d; }
@@ -14,419 +19,1245 @@
     .bg-myco-green { background-color: #4a9e4e; }
     .text-myco-red { color: #e07a7a; }
     .text-myco-yellow { color: #e0b87a; }
-    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: #2d4a2d; border-radius: 4px; }
   </style>
 </head>
-<body class="p-4 md:p-6 flex flex-col items-center justify-center min-h-screen">
+<body class="bg-[#050a05] text-white min-h-screen flex flex-col items-center justify-start p-0 sm:p-4">
 
-  <!-- Header Banner -->
-  <div class="max-w-4xl w-full mb-6 flex flex-col md:flex-row items-center justify-between gap-4 bg-[#1a2a1a] p-4 rounded-2xl border border-[#2d4a2d]">
-    <div class="flex items-center gap-3">
-      <div class="w-11 h-11 bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl flex items-center justify-center text-2xl">
-        🍄
-      </div>
+  <!-- Desktop Bar (Visible on wider screens) -->
+  <div class="hidden sm:flex max-w-md w-full mb-3 items-center justify-between gap-2 bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🍄</span>
       <div>
-        <h1 class="text-lg font-bold text-white flex items-center gap-2">
+        <h1 class="text-sm font-bold text-white flex items-center gap-1.5">
           <span>MycoTrack</span>
-          <span class="text-[10px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-2 py-0.5 rounded-full">Design MycoTrack_01</span>
+          <span class="text-[9px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-1.5 py-0.5 rounded-full font-mono">v1.2 CRUD</span>
         </h1>
-        <p class="text-xs text-slate-400">Gestion mycologique • Thème Dark Forest & Sécurité Firebase</p>
+        <p class="text-[10px] text-[#888]">Ferme de Pleurotes • Thème Dark Forest</p>
       </div>
     </div>
-
-    <!-- Sélecteur de Rôles Interactif -->
-    <div class="flex items-center bg-[#0f1a0f] p-1.5 rounded-xl border border-[#2d4a2d]">
-      <button onclick="setRole('admin')" id="role-admin-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow">
-        👑 Admin
-      </button>
-      <button onclick="setRole('prod')" id="role-prod-btn" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-        🌱 Opérateur
-      </button>
-      <button onclick="setRole('delivery')" id="role-delivery-btn" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-        🛵 Livreur
+    <div class="flex items-center gap-2">
+      <button onclick="resetDemoData()" class="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded bg-[#0f1a0f] border border-[#2d4a2d]">
+        🔄 Reset
       </button>
     </div>
   </div>
 
-  <!-- Smartphone Frame -->
-  <div class="w-full max-w-sm bg-[#0f1a0f] rounded-[40px] shadow-2xl border-[10px] border-slate-900 overflow-hidden flex flex-col relative" style="height: 760px;">
+  <!-- Main Mobile App Shell (Full screen on phone, Mockup on desktop) -->
+  <div class="w-full max-w-md bg-[#0f1a0f] min-h-screen sm:min-h-0 sm:h-[840px] sm:rounded-[36px] sm:shadow-2xl sm:border-8 sm:border-slate-900 overflow-hidden flex flex-col relative">
 
-    <!-- Top Speaker Notch -->
-    <div class="h-6 bg-slate-900 flex items-center justify-center">
-      <div class="w-20 h-3.5 bg-black rounded-full flex items-center justify-end px-2">
-        <div class="w-1.5 h-1.5 rounded-full bg-slate-800"></div>
+    <!-- Top Status / Notch on mobile desktop view -->
+    <div class="bg-[#0f1a0f] px-4 pt-2 pb-1 flex items-center justify-between border-b border-[#2d4a2d]/50 select-none">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">🍄</span>
+        <span class="font-bold text-sm tracking-wide text-white">MycoTrack</span>
+      </div>
+      
+      <!-- Role Switcher Pill -->
+      <div class="flex items-center bg-[#1a2a1a] p-1 rounded-xl border border-[#2d4a2d]">
+        <button onclick="setRole('admin')" id="role-admin-btn" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow">
+          👑 Admin
+        </button>
+        <button onclick="setRole('delivery')" id="role-delivery-btn" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          🛵 Livreur
+        </button>
       </div>
     </div>
 
-    <!-- Header App Bar -->
-    <header class="bg-[#0f1a0f] px-5 py-3.5 flex items-center justify-between border-b border-[#2d4a2d]/60">
-      <div class="flex items-center gap-2">
-        <span class="text-lg">🍄</span>
-        <span class="font-bold text-base text-white tracking-wide">MycoTrack</span>
+    <!-- Active Role Subheader -->
+    <div class="bg-[#142214] px-4 py-1.5 flex items-center justify-between text-xs border-b border-[#2d4a2d]/40">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-[#7bc67e] animate-pulse"></span>
+        <span id="role-status-text" class="text-[11px] text-[#7bc67e] font-semibold">Mode Propriétaire & Responsable</span>
       </div>
-      <div class="flex items-center gap-3">
-        <span id="role-badge" class="bg-[#1a2a1a] text-[#7bc67e] text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border border-[#2d4a2d]">
-          Admin
-        </span>
-        <button onclick="alert('Notification FCM : 2 articles sous le seuil critique !')" class="text-sm">
-          🔔
+      <div class="flex items-center gap-2">
+        <span id="live-clock" class="text-[10px] text-[#888] font-mono">14:40</span>
+        <button onclick="openScanModal()" class="text-xs bg-[#1a2a1a] border border-[#2d4a2d] px-2 py-0.5 rounded text-[#7bc67e] font-bold">
+          📷 Scan QR
         </button>
       </div>
-    </header>
+    </div>
 
-    <!-- Scrollable Content -->
-    <main id="app-content" class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0f1a0f]">
-      <!-- Dynamic View Rendered by JS -->
+    <!-- Scrollable Screen Content -->
+    <main id="app-content" class="flex-1 overflow-y-auto p-3.5 space-y-3 bg-[#0f1a0f]">
+      <!-- Content rendered by Javascript -->
     </main>
 
-    <!-- Bottom Tab Bar -->
-    <nav id="bottom-nav" class="bg-[#1a2a1a] border-t border-[#2d4a2d] px-3 py-2 flex justify-around text-center text-xs">
-      <button onclick="showTab('dashboard')" id="nav-dash" class="flex flex-col items-center text-[#7bc67e] font-bold">
-        <span class="text-base">🏠</span>
-        <span class="text-[10px]">Accueil</span>
+    <!-- Bottom Navigation Bar (Hidden in Delivery Mode) -->
+    <nav id="bottom-nav" class="bg-[#1a2a1a] border-t border-[#2d4a2d] px-2 py-2 flex justify-around text-center select-none pb-4 sm:pb-2">
+      <button onclick="switchTab('dashboard')" id="nav-dash" class="flex flex-col items-center text-[#7bc67e] font-bold p-1">
+        <span class="text-lg">🏠</span>
+        <span class="text-[10px] mt-0.5">Accueil</span>
       </button>
-      <button onclick="showTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-500 hover:text-[#7bc67e]">
-        <span class="text-base">📦</span>
-        <span class="text-[10px]">Stock</span>
+      <button onclick="switchTab('clients')" id="nav-clients" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
+        <span class="text-lg">👤</span>
+        <span class="text-[10px] mt-0.5">Clients</span>
       </button>
-      <button onclick="showTab('bags')" id="nav-bags" class="flex flex-col items-center text-slate-500 hover:text-[#7bc67e]">
-        <span class="text-base">🍄</span>
-        <span class="text-[10px]">Sacs</span>
+      <button onclick="switchTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
+        <span class="text-lg">📦</span>
+        <span class="text-[10px] mt-0.5">Stock</span>
+        <span id="stock-alert-dot" class="hidden absolute top-0 right-2 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
       </button>
-      <button onclick="showTab('clients')" id="nav-clients" class="flex flex-col items-center text-slate-500 hover:text-[#7bc67e]">
-        <span class="text-base">👤</span>
-        <span class="text-[10px]">Clients</span>
+      <button onclick="switchTab('bags')" id="nav-bags" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
+        <span class="text-lg">🍄</span>
+        <span class="text-[10px] mt-0.5">Sacs/Lots</span>
       </button>
-      <button onclick="showTab('sales')" id="nav-sales" class="flex flex-col items-center text-slate-500 hover:text-[#7bc67e]">
-        <span class="text-base">💸</span>
-        <span class="text-[10px]">Dépenses</span>
+      <button onclick="switchTab('expenses')" id="nav-exp" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
+        <span class="text-lg">💸</span>
+        <span class="text-[10px] mt-0.5">Dépenses</span>
       </button>
     </nav>
   </div>
 
+  <!-- FULLSCREEN / BOTTOM MODAL CONTAINER -->
+  <div id="modal-backdrop" class="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 hidden flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4">
+    <div id="modal-container" class="bg-[#1a2a1a] border border-[#2d4a2d] w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <!-- Dynamic Form inserted here -->
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-[#2d4a2d] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xl border border-[#7bc67e] transition-opacity duration-300 opacity-0 pointer-events-none z-50">
+    Notification
+  </div>
+
   <script>
     let currentRole = 'admin';
-    let currentPeriod = 'month';
+    let currentTab = 'dashboard';
 
-    const deliveriesData = [
-      { id: '1', num: 'LIV-001', client: 'Restaurant Le Cèdre Bleu', addr: '14 Rue Didouche Mourad, Alger', phone: '+213550112233', qty: 8.5, fee: 400, status: 'pending' },
-      { id: '2', num: 'LIV-002', client: 'Pizzeria Bella Vista', addr: '8 Boulevard Colonel Amirouche', phone: '+213661445566', qty: 5.0, fee: 350, status: 'pending' }
-    ];
+    const initialSeedState = {
+      clients: [
+        { id: 'cli_01', name: "Restaurant Le Cèdre Bleu", contact: "Chef Youssef", phone: "+213550112233", address: "14 Rue Didouche Mourad", city: "Alger", price: 1200, due: 0, type: "Restaurant" },
+        { id: 'cli_02', name: "Pizzeria Bella Vista", contact: "Sofiane", phone: "+213661445566", address: "8 Boulevard Colonel Amirouche", city: "Alger", price: 1100, due: 5500, type: "Pizzeria" },
+        { id: 'cli_03', name: "Supermarché Bio Oasis", contact: "Mme Meriem", phone: "+213770778899", address: "Centre Commercial El Qods, Chéraga", city: "Chéraga", price: 1350, due: 0, type: "Supermarché" }
+      ],
+      stocks: [
+        { id: 'stk_01', name: "Paille de blé hachée", category: "Matière première", quantity: 180, unit: "kg", threshold: 50, cost: 35 },
+        { id: 'stk_02', name: "Blanc de Pleurote HK35 (Seigle)", category: "Semence/Blanc", quantity: 14, unit: "kg", threshold: 10, cost: 650 },
+        { id: 'stk_03', name: "Sacs de culture micro-perforés", category: "Consommable", quantity: 45, unit: "unités", threshold: 50, cost: 25 }, // ALERTE CRITIQUE !
+        { id: 'stk_04', name: "Alcool à 70° désinfection", category: "Sanitation", quantity: 12, unit: "L", threshold: 5, cost: 450 },
+        { id: 'stk_05', name: "Produit décontamination sol", category: "Sanitation", quantity: 3.5, unit: "L", threshold: 4.0, cost: 1200 } // ALERTE CRITIQUE !
+      ],
+      batches: [
+        { id: 'LOT-2026-09-01', strain: 'Pleurote Gris HK35', substrate: 'Paille hachée (Fût 200L)', strawDry: 50, strawWet: 160, spawnKg: 7, bagCount: 32, date: '2026-09-01', status: 'Actif' }
+      ],
+      bags: [
+        { id: 'BAG-2026-001', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.45, room: 'Chambre 1' },
+        { id: 'BAG-2026-002', batchId: 'LOT-2026-09-01', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 1.20, room: 'Chambre 1' },
+        { id: 'BAG-2026-003', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, room: 'Incubation A' },
+        { id: 'BAG-2026-004', batchId: 'LOT-2026-09-01', status: 'contaminated', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, reason: 'Trichoderma (Moisissure verte)' },
+        { id: 'BAG-2026-005', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0, room: 'Incubation A' }
+      ],
+      expenses: [
+        { id: 'exp_01', label: "Achat paille de blé (300 kg)", amount: 4500, category: "Matière première", date: "15 Sep" },
+        { id: 'exp_02', label: "Alcool 70° & désinfectant chaux", amount: 2625, category: "Sanitation", date: "18 Sep" },
+        { id: 'exp_03', label: "Carburant livraison Alger Centre", amount: 1200, category: "Transport", date: "21 Sep" }
+      ],
+      deliveries: [
+        { id: 'deliv_1', num: 'LIV-001', clientName: 'Restaurant Le Cèdre Bleu', phone: '+213550112233', address: '14 Rue Didouche Mourad, Alger', qty: 8.5, price: 1200, fee: 400, status: 'confirmed' },
+        { id: 'deliv_2', num: 'LIV-002', clientName: 'Pizzeria Bella Vista', phone: '+213661445566', address: '8 Boulevard Colonel Amirouche, Alger', qty: 5.0, price: 1100, fee: 350, status: 'pending' },
+        { id: 'deliv_3', num: 'LIV-003', clientName: 'Supermarché Bio Oasis', phone: '+213770778899', address: 'Centre Commercial El Qods, Chéraga', qty: 15.0, price: 1350, fee: 600, status: 'confirmed' }
+      ]
+    };
 
-    function setRole(role) {
-      currentRole = role;
-      ['admin', 'prod', 'delivery'].forEach(r => {
-        const btn = document.getElementById(`role-${r}-btn`);
-        if (r === role) {
-          btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow";
-        } else {
-          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
-        }
-      });
+    let state = JSON.parse(localStorage.getItem('mycotrack_state_v2') || 'null') || initialSeedState;
 
-      const roleBadge = document.getElementById('role-badge');
-      const bottomNav = document.getElementById('bottom-nav');
+    function saveState() {
+      localStorage.setItem('mycotrack_state_v2', JSON.stringify(state));
+      checkAlerts();
+      renderCurrentView();
+    }
 
-      if (role === 'delivery') {
-        roleBadge.innerText = "Livreur";
-        roleBadge.className = "bg-[#3a2e1a] text-[#e0b87a] text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border border-[#e0b87a]/30";
-        bottomNav.classList.add('hidden');
-        renderDeliveryView();
-      } else {
-        roleBadge.innerText = role === 'admin' ? "Admin" : "Opérateur";
-        roleBadge.className = "bg-[#1a2a1a] text-[#7bc67e] text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border border-[#2d4a2d]";
-        bottomNav.classList.remove('hidden');
-        renderDashboardView();
+    function resetDemoData() {
+      if (confirm('Réinitialiser toutes les données aux valeurs de démonstration ?')) {
+        state = JSON.parse(JSON.stringify(initialSeedState));
+        saveState();
+        showToast('Données réinitialisées !');
       }
     }
 
-    function showTab(tab) {
-      ['dash', 'stock', 'bags', 'clients', 'sales'].forEach(t => {
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2400);
+    }
+
+    function checkAlerts() {
+      const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
+      const dot = document.getElementById('stock-alert-dot');
+      if (dot) {
+        if (lowCount > 0) dot.classList.remove('hidden');
+        else dot.classList.add('hidden');
+      }
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      const adminBtn = document.getElementById('role-admin-btn');
+      const deliveryBtn = document.getElementById('role-delivery-btn');
+      const statusText = document.getElementById('role-status-text');
+      const bottomNav = document.getElementById('bottom-nav');
+
+      if (role === 'delivery') {
+        adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+        deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#e0b87a] text-black shadow";
+        statusText.innerText = "Mode Livreur • Chauffeur terrain";
+        statusText.className = "text-[11px] text-[#e0b87a] font-semibold";
+        bottomNav.classList.add('hidden');
+        renderDeliveryView();
+      } else {
+        deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+        adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow";
+        statusText.innerText = "Mode Propriétaire & Responsable";
+        statusText.className = "text-[11px] text-[#7bc67e] font-semibold";
+        bottomNav.classList.remove('hidden');
+        switchTab(currentTab === 'delivery' ? 'dashboard' : currentTab);
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      ['dash', 'clients', 'stock', 'bags', 'exp'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (el) {
           if ((tab === 'dashboard' && t === 'dash') || 
+              (tab === 'clients' && t === 'clients') || 
               (tab === 'stock' && t === 'stock') || 
               (tab === 'bags' && t === 'bags') || 
-              (tab === 'clients' && t === 'clients') || 
-              (tab === 'sales' && t === 'sales')) {
-            el.className = "flex flex-col items-center text-[#7bc67e] font-bold";
+              (tab === 'expenses' && t === 'exp')) {
+            el.className = "flex flex-col items-center text-[#7bc67e] font-bold p-1";
           } else {
-            el.className = "flex flex-col items-center text-slate-500 hover:text-[#7bc67e]";
+            el.className = "flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1";
           }
         }
       });
-
-      if (tab === 'dashboard') renderDashboardView();
-      else if (tab === 'bags') renderBagsView();
-      else if (tab === 'stock') renderStockView();
-      else if (tab === 'clients') renderClientsView();
-      else if (tab === 'sales') renderExpensesView();
+      renderCurrentView();
     }
 
-    // 1. DASHBOARD PRINCIPAL (STYLE EXACT MYCOTRACK)
+    function renderCurrentView() {
+      if (currentRole === 'delivery') {
+        renderDeliveryView();
+      } else {
+        if (currentTab === 'dashboard') renderDashboardView();
+        else if (currentTab === 'clients') renderClientsView();
+        else if (currentTab === 'stock') renderStockView();
+        else if (currentTab === 'bags') renderBagsView();
+        else if (currentTab === 'expenses') renderExpensesView();
+      }
+    }
+
+    // ==========================================
+    // 1. DASHBOARD PRINCIPAL
+    // ==========================================
     function renderDashboardView() {
       const container = document.getElementById('app-content');
+      const totalRevenue = state.deliveries.reduce((sum, d) => sum + (d.qty * d.price), 0);
+      const totalDelivererFees = state.deliveries.reduce((sum, d) => sum + d.fee, 0);
+      const totalExpenses = state.expenses.reduce((sum, e) => sum + e.amount, 0);
+      const netProfit = totalRevenue - totalDelivererFees - totalExpenses;
+      const totalDue = state.clients.reduce((sum, c) => sum + (c.due || 0), 0);
+      const totalCollected = totalRevenue - totalDue;
+
+      const lowStocks = state.stocks.filter(s => s.quantity <= s.threshold);
+      const activeIncub = state.bags.filter(b => b.status === 'incubation').length;
+      const activeFruit = state.bags.filter(b => b.status === 'fruiting').length;
+      const activeContam = state.bags.filter(b => b.status === 'contaminated').length;
+
       container.innerHTML = `
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mb-2">Résumé financier global</h2>
+        <div class="flex justify-between items-center mb-1">
+          <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">RÉSUMÉ FINANCIER GLOBAL</h2>
+          <button onclick="openNewSaleModal()" class="text-[11px] bg-[#4a9e4e] text-white px-2.5 py-1 rounded-lg font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouvelle Vente</span>
+          </button>
+        </div>
         
-        <!-- KPI Cards Grid -->
-        <div class="grid grid-cols-2 gap-2.5">
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+        <!-- Double-Grid MycoTrack KPIs -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Chiffre d'affaires</p>
-            <p class="text-base font-bold text-white mt-1">35 950 DA</p>
-            <p class="text-[10px] text-[#666] mt-0.5">Total livraisons</p>
+            <p class="text-base font-bold text-white mt-0.5">${totalRevenue.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${state.deliveries.length} livraisons</p>
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Frais livreurs</p>
-            <p class="text-base font-bold text-[#e0b87a] mt-1">1 350 DA</p>
-            <p class="text-[10px] text-[#666] mt-0.5">Total courses</p>
+            <p class="text-base font-bold text-[#e0b87a] mt-0.5">${totalDelivererFees.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Courses validées</p>
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Dépenses</p>
-            <p class="text-base font-bold text-[#e07a7a] mt-1">7 125 DA</p>
-            <p class="text-[10px] text-[#666] mt-0.5">Achats + matériel</p>
+            <p class="text-base font-bold text-[#e07a7a] mt-0.5">${totalExpenses.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Substrats & intrants</p>
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Bénéfice net</p>
-            <p class="text-base font-bold text-[#7bc67e] mt-1">27 475 DA</p>
-            <p class="text-[10px] text-[#666] mt-0.5">Marge réelle</p>
+            <p class="text-base font-bold text-[#7bc67e] mt-0.5">${netProfit.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Marge nette réelle</p>
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Encaissé</p>
-            <p class="text-base font-bold text-[#7bc67e] mt-1">30 450 DA</p>
+            <p class="text-base font-bold text-[#7bc67e] mt-0.5">${totalCollected.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">En caisse ferme</p>
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
             <p class="text-[11px] text-[#888]">Impayés</p>
-            <p class="text-base font-bold text-[#e0b87a] mt-1">5 500 DA</p>
-            <p class="text-[10px] text-[#666] mt-0.5">1 client(s) +30j</p>
+            <p class="text-base font-bold text-[#e0b87a] mt-0.5">${totalDue.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${state.clients.filter(c=>c.due>0).length} client(s) redevable(s)</p>
           </div>
         </div>
 
-        <!-- Bénéfice net Graphique BarChart -->
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-4 mb-2">Bénéfice net</h2>
-        <div class="flex gap-2 overflow-x-auto pb-1 text-xs">
-          ${[['day','7 jours'],['month1','1 mois'],['month','6 mois'],['month12','12 mois'],['all','Tout']].map(([k,l]) => `
-            <button onclick="currentPeriod='${k}'; renderDashboardView();" class="px-3 py-1.5 rounded-full border text-xs font-medium whitespace-nowrap ${currentPeriod === k ? 'bg-[#4a9e4e] text-white border-[#4a9e4e]' : 'border-[#2d4a2d] text-[#aaa]'}">
-              ${l}
-            </button>
-          `).join('')}
-        </div>
-
-        <div class="bg-[#1a2a1a] p-4 rounded-2xl border border-[#2d4a2d] mt-2">
-          <div class="flex items-end justify-between h-28 px-2 gap-2">
-            ${[
-              { lbl: 'Avr', val: '12.5k', h: '45%' },
-              { lbl: 'Mai', val: '18.0k', h: '65%' },
-              { lbl: 'Jun', val: '22.0k', h: '80%' },
-              { lbl: 'Jul', val: '19.5k', h: '70%' },
-              { lbl: 'Aoû', val: '25.0k', h: '90%' },
-              { lbl: 'Sep', val: '27.4k', h: '100%' },
-            ].map(b => `
-              <div class="flex flex-col items-center flex-1">
-                <span class="text-[9px] text-[#7bc67e] mb-1 font-mono">${b.val}</span>
-                <div class="w-full bg-[#4a9e4e] rounded-t-sm transition-all" style="height: ${b.h}"></div>
-                <span class="text-[9px] text-[#888] mt-1">${b.lbl}</span>
+        <!-- Alerte dynamique si stock bas ou impayé -->
+        ${lowStocks.length > 0 || totalDue > 0 ? `
+          <div class="mt-2 space-y-1.5">
+            <h2 class="text-xs font-bold text-[#e07a7a] tracking-wider uppercase flex items-center gap-1.5">
+              <span>⚠️</span> <span>ALERTES IMMÉDIATES (${lowStocks.length + (totalDue > 0 ? 1 : 0)})</span>
+            </h2>
+            ${lowStocks.map(s => `
+              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a] flex justify-between items-center">
+                <div>
+                  <p class="font-bold">🔴 Stock critique : ${s.name}</p>
+                  <p class="text-[10px] text-[#aaa]">Reste <strong>${s.quantity} ${s.unit}</strong> (seuil alerte : ${s.threshold} ${s.unit})</p>
+                </div>
+                <button onclick="openStockMvtModal('${s.id}', 'in')" class="px-2.5 py-1 bg-[#4a9e4e] text-white rounded-lg text-[10px] font-bold shadow hover:bg-emerald-600">
+                  + Réappro
+                </button>
+              </div>
+            `).join('')}
+            ${state.clients.filter(c => c.due > 0).map(c => `
+              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e0b87a] flex justify-between items-center">
+                <div>
+                  <p class="font-bold">🔴 Impayé : ${c.name}</p>
+                  <p class="text-[10px] text-[#aaa]">Reste à régler : <strong>${c.due.toLocaleString()} DA</strong></p>
+                </div>
+                <a href="tel:${c.phone}" class="px-2.5 py-1 bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40 rounded-lg text-[10px] font-bold">
+                  📞 Relancer
+                </a>
               </div>
             `).join('')}
           </div>
+        ` : ''}
+
+        <!-- Modules Raccourcis Rapides -->
+        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-2 mb-1">MODULES DE GESTION</h2>
+        <div class="grid grid-cols-2 gap-2">
+          <div onclick="switchTab('clients')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">👤</span>
+            <h3 class="text-xs font-bold text-white mt-1">Clients & Tarifs</h3>
+            <p class="text-[10px] text-[#888]">${state.clients.length} clients enregistrés</p>
+          </div>
+          <div onclick="switchTab('stock')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">📦</span>
+            <h3 class="text-xs font-bold text-white mt-1">Stocks & Intrants</h3>
+            <p class="text-[10px] ${lowStocks.length > 0 ? 'text-[#e07a7a] font-bold' : 'text-[#888]'}">
+              ${lowStocks.length > 0 ? `${lowStocks.length} alerte(s) stock` : `${state.stocks.length} articles à jour`}
+            </p>
+          </div>
+          <div onclick="switchTab('bags')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">🍄</span>
+            <h3 class="text-xs font-bold text-white mt-1">Sacs & Lots 200L</h3>
+            <p class="text-[10px] text-[#888]">${state.bags.length} sacs suivis</p>
+          </div>
+          <div onclick="switchTab('expenses')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">💸</span>
+            <h3 class="text-xs font-bold text-white mt-1">Dépenses Exploitation</h3>
+            <p class="text-[10px] text-[#888]">${totalExpenses.toLocaleString()} DA enregistrés</p>
+          </div>
         </div>
 
-        <!-- Alertes -->
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-4 mb-2">⚠️ Alertes</h2>
-        <div class="space-y-2">
-          <div class="bg-[#2a1a1a] p-3 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a]">
-            🔴 Stock bas — Sacs micro-perforés : 45 unités (Seuil : 50)
-          </div>
-          <div class="bg-[#2a1a1a] p-3 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a]">
-            🔴 Impayé +30j — Pizzeria Bella Vista : 5 500 DA
-          </div>
-        </div>
-
-        <!-- Production sacs actifs -->
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-4 mb-2">🍄 Production — sacs actifs</h2>
-        <div class="bg-[#1a2a1a] px-4 py-2 rounded-2xl border border-[#2d4a2d] text-xs divide-y divide-[#2d4a2d]">
+        <!-- Production Sacs Actifs -->
+        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-2 mb-1">🍄 PRODUCTION — SACS ACTIFS</h2>
+        <div class="bg-[#1a2a1a] px-3.5 py-1 rounded-2xl border border-[#2d4a2d] text-xs divide-y divide-[#2d4a2d]">
           <div class="flex justify-between py-2 text-[#aaa]"><span>🧪 Ensemencement</span> <span class="font-bold text-white">0</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>🌡️ Incubation</span> <span class="font-bold text-white">21</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>🍄 Fructification</span> <span class="font-bold text-white">10</span></div>
-          <div class="flex justify-between py-2 text-[#aaa]"><span>☣️ Contaminés</span> <span class="font-bold text-[#e07a7a]">1</span></div>
+          <div class="flex justify-between py-2 text-[#aaa]"><span>🌡️ Incubation</span> <span class="font-bold text-white">${activeIncub}</span></div>
+          <div class="flex justify-between py-2 text-[#aaa]"><span>🍄 Fructification</span> <span class="font-bold text-white">${activeFruit}</span></div>
+          <div class="flex justify-between py-2 text-[#aaa]"><span>☣️ Contaminés</span> <span class="font-bold text-[#e07a7a]">${activeContam}</span></div>
         </div>
       `;
     }
 
-    // 2. VUE LIVREUR (STYLE EXACT MYDELIVERIES SCREEN)
-    function renderDeliveryView() {
+    // ==========================================
+    // 2. GESTION DES CLIENTS (CRUD COMPLET)
+    // ==========================================
+    function renderClientsView() {
       const container = document.getElementById('app-content');
       container.innerHTML = `
-        <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase mb-2">🚚 Mes Livraisons du Jour</h2>
-        <div class="space-y-3">
-          ${deliveriesData.map(d => `
-            <div class="bg-[#1a2a1a] p-4 rounded-2xl border ${d.status === 'confirmed' ? 'border-[#4a9e4e]' : 'border-[#2d4a2d]'} space-y-3">
-              <div class="flex justify-between items-center">
-                <span class="text-xs text-[#888] font-bold">${d.num}</span>
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${d.status === 'confirmed' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/30'}">
-                  ${d.status === 'confirmed' ? '✅ Confirmée' : '⏳ En attente'}
-                </span>
-              </div>
+        <div class="flex justify-between items-center mb-1">
+          <div>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Répertoire Clients</h2>
+            <p class="text-[10px] text-[#888]">${state.clients.length} clients avec tarifs personnalisés</p>
+          </div>
+          <button onclick="openNewClientModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouveau Client</span>
+          </button>
+        </div>
 
-              <div>
-                <h3 class="font-bold text-white text-sm">${d.client}</h3>
-                <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">🍄 ${d.qty} kg de pleurotes frais</p>
-                <p class="text-xs text-[#aaa] mt-1">📍 ${d.addr}</p>
-              </div>
+        <div class="space-y-2 mt-2">
+          ${state.clients.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
+              <p class="text-sm text-[#888]">Aucun client pour le moment.</p>
+              <button onclick="openNewClientModal()" class="mt-3 px-3 py-1 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Ajouter votre premier client</button>
+            </div>
+          ` : ''}
 
-              <div class="bg-[#0f1a0f] p-2 rounded-lg text-xs flex justify-between">
-                <span class="text-[#888]">Tarif course :</span>
-                <strong class="text-white">${d.fee} DA</strong>
-              </div>
-
-              ${d.status !== 'confirmed' ? `
-                <div class="grid grid-cols-2 gap-2 pt-1">
-                  <a href="tel:${d.phone}" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow">
-                    <span>📞</span> Appeler
-                  </a>
-                  <button onclick="alert('GPS vers : ' + '${d.addr}')" class="py-2.5 bg-[#1a2a1a] text-[#aaa] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
-                    <span>🗺️</span> GPS
-                  </button>
+          ${state.clients.map(c => `
+            <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2">
+              <div class="flex justify-between items-start">
+                <div>
+                  <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                    <span>${c.name}</span>
+                    <span class="text-[9px] bg-[#0f1a0f] text-[#7bc67e] border border-[#2d4a2d] px-1.5 py-0.2 rounded font-normal">${c.type || 'Client'}</span>
+                  </h3>
+                  ${c.contact ? `<p class="text-[11px] text-[#aaa]">Contact : ${c.contact}</p>` : ''}
                 </div>
-                <button onclick="confirmDeliv('${d.id}')" class="w-full py-3 bg-[#1f3a1f] hover:bg-[#284a28] text-[#7bc67e] border border-[#7bc67e]/40 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow">
-                  <span>✅</span> Confirmer la livraison
+                <div class="flex items-center gap-1">
+                  <button onclick="openEditClientModal('${c.id}')" class="text-slate-400 hover:text-white p-1 text-xs" title="Modifier">✏️</button>
+                  <button onclick="deleteClient('${c.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Supprimer">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Tarif & Localisation -->
+              <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] flex justify-between items-center text-xs">
+                <div>
+                  <span class="text-[#888] text-[10px]">Tarif négocié</span>
+                  <p class="font-bold text-[#7bc67e] text-sm">${c.price.toLocaleString()} DA <span class="text-[10px] text-[#888]">/ kg</span></p>
+                </div>
+                <div class="text-right">
+                  <span class="text-[#888] text-[10px]">Statut financier</span>
+                  <p class="font-bold text-xs ${c.due > 0 ? 'text-[#e07a7a]' : 'text-[#7bc67e]'}">
+                    ${c.due > 0 ? `🔴 Impayé : ${c.due.toLocaleString()} DA` : '✓ À jour'}
+                  </p>
+                </div>
+              </div>
+
+              <p class="text-xs text-[#aaa] flex items-center gap-1.5">
+                <span>📍</span> <span>${c.address}, ${c.city}</span>
+              </p>
+
+              <!-- Actions directes -->
+              <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
+                <a href="tel:${c.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
+                  <span>📞</span> <span>${c.phone}</span>
+                </a>
+                <button onclick="openNewSaleForClient('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
+                  <span>🛒</span> <span>Créer Vente</span>
                 </button>
-              ` : `
-                <div class="text-center py-1 text-xs text-[#7bc67e] font-bold">
-                  ✓ Course validée avec succès !
-                </div>
-              `}
+              </div>
             </div>
           `).join('')}
         </div>
       `;
     }
 
-    function confirmDeliv(id) {
-      const d = deliveriesData.find(x => x.id === id);
-      if (d) d.status = 'confirmed';
-      renderDeliveryView();
+    function openNewClientModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>👤</span> <span>Ajouter un Nouveau Client</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Enregistrez les coordonnées et le prix convenu par kilo.</p>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Nom du restaurant / Client *</label>
+            <input id="cli-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Hôtel Sheraton Club des Pins">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Nom du contact</label>
+              <input id="cli-contact" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chef Karim">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Type de client</label>
+              <select id="cli-type" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
+                <option value="Restaurant">Restaurant</option>
+                <option value="Pizzeria">Pizzeria</option>
+                <option value="Supermarché">Supermarché</option>
+                <option value="Grossiste">Grossiste</option>
+                <option value="Particulier">Particulier</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Numéro de Téléphone *</label>
+            <input id="cli-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" placeholder="ex: +213 555 12 34 56" value="+213">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Adresse de livraison</label>
+            <input id="cli-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Route des Dunes, Staouéli">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Ville</label>
+              <input id="cli-city" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="Alger">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Prix négocié (DA/kg) *</label>
+              <input id="cli-price" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="1200">
+            </div>
+          </div>
+
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewClient()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">Enregistrer Client</button>
+          </div>
+        </div>
+      `);
     }
 
-    // 3. VUE SACS & LOTS (STYLE EXACT BAGSSCREEN)
+    function saveNewClient() {
+      const name = document.getElementById('cli-name').value.trim();
+      const contact = document.getElementById('cli-contact').value.trim();
+      const type = document.getElementById('cli-type').value;
+      const phone = document.getElementById('cli-phone').value.trim();
+      const address = document.getElementById('cli-address').value.trim();
+      const city = document.getElementById('cli-city').value.trim();
+      const price = parseFloat(document.getElementById('cli-price').value) || 1200;
+
+      if (!name) return alert('Le nom du client est obligatoire.');
+      if (!phone || phone === '+213') return alert('Le numéro de téléphone est obligatoire.');
+
+      state.clients.unshift({
+        id: 'cli_' + Date.now(),
+        name,
+        contact,
+        type,
+        phone,
+        address: address || 'Alger',
+        city: city || 'Alger',
+        price,
+        due: 0
+      });
+
+      saveState();
+      closeModal();
+      showToast('Nouveau client ajouté !');
+    }
+
+    function openEditClientModal(id) {
+      const c = state.clients.find(x => x.id === id);
+      if (!c) return;
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2">Modifier Client : ${c.name}</h3>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Nom / Enseigne</label>
+            <input id="edit-cli-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${c.name}">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Téléphone</label>
+            <input id="edit-cli-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" value="${c.phone}">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Adresse</label>
+            <input id="edit-cli-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${c.address}">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Tarif (DA/kg)</label>
+              <input id="edit-cli-price" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.price}">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Impayé / Dû (DA)</label>
+              <input id="edit-cli-due" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${c.due || 0}">
+            </div>
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="applyEditClient('${id}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold">Sauvegarder</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function applyEditClient(id) {
+      const c = state.clients.find(x => x.id === id);
+      if (!c) return;
+      c.name = document.getElementById('edit-cli-name').value.trim();
+      c.phone = document.getElementById('edit-cli-phone').value.trim();
+      c.address = document.getElementById('edit-cli-address').value.trim();
+      c.price = parseFloat(document.getElementById('edit-cli-price').value) || c.price;
+      c.due = parseFloat(document.getElementById('edit-cli-due').value) || 0;
+      saveState();
+      closeModal();
+      showToast('Client mis à jour !');
+    }
+
+    function deleteClient(id) {
+      const c = state.clients.find(x => x.id === id);
+      if (!c) return;
+      if (confirm(`Confirmez-vous la suppression du client "${c.name}" ?`)) {
+        state.clients = state.clients.filter(x => x.id !== id);
+        saveState();
+        showToast('Client supprimé.');
+      }
+    }
+
+    function openNewSaleForClient(cliId) {
+      openNewSaleModal(cliId);
+    }
+
+    // ==========================================
+    // 3. GESTION DU STOCK & INTRANTS (CRUD)
+    // ==========================================
+    function renderStockView() {
+      const container = document.getElementById('app-content');
+      const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
+
+      container.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+          <div>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Stocks & Intrants</h2>
+            <p class="text-[10px] text-[#888]">${state.stocks.length} matières suivies • ${lowCount} seuil(s) critique(s)</p>
+          </div>
+          <button onclick="openNewStockModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouvel Article</span>
+          </button>
+        </div>
+
+        <div class="space-y-2 mt-2">
+          ${state.stocks.map(s => {
+            const isLow = s.quantity <= s.threshold;
+            return `
+              <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isLow ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h3 class="font-bold text-white text-xs flex items-center gap-1.5">
+                      <span>${isLow ? '🔴' : '🟢'}</span>
+                      <span>${s.name}</span>
+                    </h3>
+                    <p class="text-[10px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-[#888]'} mt-0.5">
+                      Stock actuel : <strong>${s.quantity} ${s.unit}</strong> • Seuil alerte : ${s.threshold} ${s.unit}
+                    </p>
+                    <p class="text-[9px] text-[#666]">Coût unitaire : ${s.cost || 0} DA / ${s.unit}</p>
+                  </div>
+                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer article">🗑️</button>
+                </div>
+
+                <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/50">
+                  <button onclick="openStockMvtModal('${s.id}', 'in')" class="flex-1 py-1.5 bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                    <span>+</span> <span>Entrée (Réappro)</span>
+                  </button>
+                  <button onclick="openStockMvtModal('${s.id}', 'out')" class="flex-1 py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                    <span>-</span> <span>Sortie (Usage)</span>
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function openNewStockModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>📦</span> <span>Ajouter un Article au Stock</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Paille, blanc de champignon, chaux, sacs micro-perforés...</p>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Désignation de l'article *</label>
+            <input id="stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Blanc de Pleurote M2125">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Quantité initiale</label>
+              <input id="stk-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="20">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Unité</label>
+              <select id="stk-unit" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
+                <option value="kg">kg (kilogrammes)</option>
+                <option value="unités">unités / sacs</option>
+                <option value="L">L (Litres)</option>
+                <option value="paquets">paquets</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Seuil d'alerte critique</label>
+              <input id="stk-threshold" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Prix unitaire (DA)</label>
+              <input id="stk-cost" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="450">
+            </div>
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewStockItem()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Enregistrer</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveNewStockItem() {
+      const name = document.getElementById('stk-name').value.trim();
+      const qty = parseFloat(document.getElementById('stk-qty').value) || 0;
+      const unit = document.getElementById('stk-unit').value;
+      const threshold = parseFloat(document.getElementById('stk-threshold').value) || 5;
+      const cost = parseFloat(document.getElementById('stk-cost').value) || 0;
+
+      if (!name) return alert('Désignation obligatoire');
+
+      state.stocks.push({
+        id: 'stk_' + Date.now(),
+        name,
+        quantity: qty,
+        unit,
+        threshold,
+        cost
+      });
+
+      saveState();
+      closeModal();
+      showToast('Article ajouté au stock !');
+    }
+
+    function openStockMvtModal(id, type) {
+      const item = state.stocks.find(s => s.id === id);
+      if (!item) return;
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-1">
+          ${type === 'in' ? '🟢 + Entrée de Stock (Réappro)' : '🔴 - Sortie de Stock (Usage)'}
+        </h3>
+        <p class="text-xs text-[#7bc67e] mb-3">${item.name} • Actuel : <strong>${item.quantity} ${item.unit}</strong></p>
+        
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Quantité à ${type === 'in' ? 'ajouter' : 'déduire'} (${item.unit}) *</label>
+            <input id="mvt-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" placeholder="ex: 15" autofocus>
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Motif / Justification</label>
+            <input id="mvt-reason" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${type === 'in' ? 'Achat fournisseur' : 'Usage pasteurisation lot'}">
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="applyStockMvt('${id}', '${type}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider Mouvement</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function applyStockMvt(id, type) {
+      const val = parseFloat(document.getElementById('mvt-qty').value);
+      if (!val || val <= 0) return alert('Veuillez entrer une quantité valide (> 0).');
+      const item = state.stocks.find(s => s.id === id);
+      if (item) {
+        if (type === 'in') {
+          item.quantity = Math.round((item.quantity + val) * 100) / 100;
+        } else {
+          item.quantity = Math.max(0, Math.round((item.quantity - val) * 100) / 100);
+        }
+        saveState();
+        showToast(`Stock ${item.name} mis à jour : ${item.quantity} ${item.unit}`);
+      }
+      closeModal();
+    }
+
+    function deleteStockItem(id) {
+      const item = state.stocks.find(s => s.id === id);
+      if (!item) return;
+      if (confirm(`Supprimer l'article "${item.name}" du stock ?`)) {
+        state.stocks = state.stocks.filter(s => s.id !== id);
+        saveState();
+        showToast('Article supprimé.');
+      }
+    }
+
+    // ==========================================
+    // 4. CULTURE, SACS & LOTS (PASTEURISATION 200L)
+    // ==========================================
     function renderBagsView() {
       const container = document.getElementById('app-content');
       container.innerHTML = `
-        <div class="flex justify-between items-center mb-3">
-          <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Lots & Sacs de culture</h2>
-          <button onclick="alert('Ouverture caméra pour scan QR code')" class="text-xs bg-[#4a9e4e] text-white px-2.5 py-1 rounded-lg font-bold">📷 Scanner QR</button>
+        <div class="flex justify-between items-center mb-1">
+          <div>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Culture, Sacs & Lots</h2>
+            <p class="text-[10px] text-[#888]">${state.batches.length} lot(s) • ${state.bags.length} sacs suivis</p>
+          </div>
+          <button onclick="openNewBatchModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouveau Lot (200L)</span>
+          </button>
         </div>
 
-        <div class="bg-[#1a2a1a] p-4 rounded-2xl border border-[#2d4a2d] space-y-2">
-          <div class="flex justify-between items-start">
-            <div>
-              <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md">LOT-2026-09-01</span>
-              <h3 class="font-bold text-white text-sm mt-1">Pleurote Gris HK35</h3>
+        <!-- Lots en cours -->
+        ${state.batches.map(batch => `
+          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-1 mb-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${batch.id}</span>
+                <h3 class="font-bold text-white text-xs mt-1">${batch.strain}</h3>
+              </div>
+              <span class="text-[10px] font-bold text-[#7bc67e] bg-[#1f3a1f] px-2 py-0.5 rounded-full border border-[#7bc67e]/30">Actif</span>
             </div>
-            <span class="text-xs font-bold text-[#7bc67e] bg-[#1f3a1f] px-2 py-0.5 rounded-full">🍄 Fructification</span>
+            <p class="text-[10px] text-[#aaa]">Substrat : ${batch.strawDry}kg paille sèche (${batch.strawWet}kg égouttée) • ${batch.bagCount} sacs</p>
           </div>
+        `).join('')}
 
-          <div class="bg-[#0f1a0f] p-2.5 rounded-xl text-xs space-y-1 text-[#aaa]">
-            <p>Substrat : <strong class="text-white">Paille hachée</strong> (Fût 200L)</p>
-            <p>Sacs générés : <strong class="text-white">32 sacs de 5kg</strong></p>
-            <p>Efficacité biologique : <strong class="text-[#7bc67e]">75.0 % BE</strong></p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 pt-2">
-            <button onclick="alert('Pesée Vague 1 enregistrée pour ce lot !')" class="py-2 bg-[#2d4a2d] text-white text-xs font-bold rounded-xl">
-              ⚖️ Peser Récolte
-            </button>
-            <button onclick="alert('Sac marqué comme contaminé Trichoderma et écarté.')" class="py-2 bg-[#3a1a1a] text-[#e07a7a] text-xs font-bold rounded-xl border border-[#5a2a2a]">
-              ☣️ Déclarer Avarie
-            </button>
-          </div>
-        </div>
-      `;
-    }
-
-    // 4. VUE STOCKS (STYLE EXACT STOCKSCREEN)
-    function renderStockView() {
-      const container = document.getElementById('app-content');
-      container.innerHTML = `
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mb-3">État des Stocks & Intrants</h2>
+        <h3 class="text-xs font-bold text-white mt-3 mb-1">Sacs individuels & Pesées de récolte :</h3>
         <div class="space-y-2">
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#5a2a2a] bg-[#2a1a1a]/30 flex justify-between items-center">
-            <div>
-              <p class="font-bold text-white text-xs">🔴 Sacs micro-perforés 5kg</p>
-              <p class="text-[11px] text-[#e07a7a]">Reste : 45 unités (Seuil : 50)</p>
-            </div>
-            <button onclick="alert('Approvisionnement enregistré !')" class="px-2 py-1 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Réappro</button>
-          </div>
+          ${state.bags.map(b => {
+            const isFruit = b.status === 'fruiting';
+            const isContam = b.status === 'contaminated';
+            return `
+              <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isContam ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-mono font-bold text-white">${b.id}</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isFruit ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 
+                    (isContam ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40')
+                  }">
+                    ${isFruit ? '🍄 Fructification' : (isContam ? '☣️ Contaminé' : '🌡️ Incubation')}
+                  </span>
+                </div>
 
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center">
-            <div>
-              <p class="font-bold text-white text-xs">🟢 Paille de blé hachée</p>
-              <p class="text-[11px] text-[#aaa]">Stock : 180 kg (Seuil : 50 kg)</p>
-            </div>
-            <span class="text-xs font-bold text-[#7bc67e] bg-[#1f3a1f] px-2 py-0.5 rounded-md">OK</span>
-          </div>
+                <div class="flex justify-between text-xs text-[#aaa] bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d]">
+                  <span>Poids substrat : <strong>${b.weight} kg</strong></span>
+                  <span>Récolté : <strong class="text-[#7bc67e] text-sm">${b.harvestedKg || 0} kg</strong></span>
+                </div>
 
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center">
-            <div>
-              <p class="font-bold text-white text-xs">🟢 Blanc Pleurote HK35</p>
-              <p class="text-[11px] text-[#aaa]">Stock : 14 kg (Seuil : 10 kg)</p>
-            </div>
-            <span class="text-xs font-bold text-[#7bc67e] bg-[#1f3a1f] px-2 py-0.5 rounded-md">OK</span>
-          </div>
+                ${!isContam ? `
+                  <div class="flex gap-2 pt-1">
+                    ${!isFruit ? `
+                      <button onclick="moveToFruiting('${b.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold hover:bg-[#2e522e]">
+                        💧 Mettre en Fructification
+                      </button>
+                    ` : `
+                      <button onclick="openHarvestModal('${b.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 flex items-center justify-center gap-1">
+                        <span>⚖️</span> <span>Peser Récolte</span>
+                      </button>
+                    `}
+                    <button onclick="markContaminated('${b.id}')" class="px-3 py-1.5 bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold hover:bg-[#4a2020]">
+                      ☣️ Avarie
+                    </button>
+                  </div>
+                ` : `
+                  <p class="text-[10px] text-[#e07a7a] font-bold">Sac retiré de la salle de culture (Contamination détectée).</p>
+                `}
+              </div>
+            `;
+          }).join('')}
         </div>
       `;
     }
 
-    // 5. VUE CLIENTS
-    function renderClientsView() {
-      const container = document.getElementById('app-content');
-      container.innerHTML = `
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mb-3">Répertoire Clients & Tarifs</h2>
-        <div class="space-y-2">
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
-            <div class="flex justify-between">
-              <h3 class="font-bold text-white text-xs">Restaurant Le Cèdre Bleu</h3>
-              <span class="text-[#7bc67e] font-bold text-xs">1 200 DA/kg</span>
-            </div>
-            <p class="text-[11px] text-[#aaa] mt-1">14 Rue Didouche Mourad, Alger</p>
+    function openNewBatchModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>🍄</span> <span>Créer un Lot de Pasteurisation (Fût 200L)</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Calcul automatique du substrat et génération instantanée des sacs.</p>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Code du Lot</label>
+            <input id="batch-code" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono font-bold" value="LOT-${new Date().toISOString().slice(5,10)}-01">
           </div>
-          <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d]">
-            <div class="flex justify-between">
-              <h3 class="font-bold text-white text-xs">Pizzeria Bella Vista</h3>
-              <span class="text-[#7bc67e] font-bold text-xs">1 100 DA/kg</span>
+          <div>
+            <label class="text-[#888] block mb-1">Variété / Souche</label>
+            <input id="batch-strain" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="Pleurote Gris HK35">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Paille sèche (kg)</label>
+              <input id="batch-dry" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="50">
             </div>
-            <p class="text-[11px] text-[#e07a7a] text-[10px] mt-1 font-semibold">🔴 Solde impayé : 5 500 DA (+30j)</p>
+            <div>
+              <label class="text-[#888] block mb-1">Nombre de sacs</label>
+              <input id="batch-bags" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="32">
+            </div>
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewBatch()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Créer & Générer</button>
           </div>
         </div>
-      `;
+      `);
     }
 
-    // 6. VUE DÉPENSES
+    function saveNewBatch() {
+      const code = document.getElementById('batch-code').value.trim();
+      const strain = document.getElementById('batch-strain').value.trim();
+      const dry = parseFloat(document.getElementById('batch-dry').value) || 50;
+      const count = parseInt(document.getElementById('batch-bags').value) || 10;
+
+      state.batches.unshift({
+        id: code,
+        strain,
+        substrate: 'Paille hachée (Fût 200L)',
+        strawDry: dry,
+        strawWet: Math.round(dry * 3.2),
+        spawnKg: 7,
+        bagCount: count,
+        date: new Date().toISOString().slice(0, 10),
+        status: 'Actif'
+      });
+
+      for (let i = 1; i <= Math.min(count, 10); i++) {
+        state.bags.unshift({
+          id: `BAG-${code.slice(-5)}-${i.toString().padStart(3, '0')}`,
+          batchId: code,
+          status: 'incubation',
+          weight: 5.0,
+          strain: strain,
+          harvestedKg: 0,
+          room: 'Chambre Incubation'
+        });
+      }
+
+      saveState();
+      closeModal();
+      showToast(`Lot ${code} créé avec succès !`);
+    }
+
+    function moveToFruiting(bagId) {
+      const b = state.bags.find(x => x.id === bagId);
+      if (b) {
+        b.status = 'fruiting';
+        saveState();
+        showToast(`${bagId} passé en Fructification !`);
+      }
+    }
+
+    function markContaminated(bagId) {
+      const b = state.bags.find(x => x.id === bagId);
+      if (b) {
+        if (confirm(`Déclarer le sac ${bagId} comme contaminé (avarie) ?`)) {
+          b.status = 'contaminated';
+          saveState();
+          showToast(`Avarie enregistrée pour ${bagId}`);
+        }
+      }
+    }
+
+    function openHarvestModal(bagId) {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>⚖️</span> <span>Pesée Récolte Pleurotes</span>
+        </h3>
+        <p class="text-xs text-[#888] mb-3">Sac identifié : <strong class="text-white font-mono">${bagId}</strong></p>
+        
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Poids de pleurotes frais récoltés (kg) *</label>
+            <input id="harvest-val" type="number" step="0.05" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" value="1.25" autofocus>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="applyHarvest('${bagId}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider la Pesée</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function applyHarvest(bagId) {
+      const val = parseFloat(document.getElementById('harvest-val').value) || 0;
+      if (val <= 0) return alert('Poids invalide.');
+      const b = state.bags.find(x => x.id === bagId);
+      if (b) {
+        b.harvestedKg = Math.round(((b.harvestedKg || 0) + val) * 100) / 100;
+        saveState();
+        showToast(`+${val} kg enregistrés pour ${bagId} !`);
+      }
+      closeModal();
+    }
+
+    // ==========================================
+    // 5. GESTION DES DÉPENSES
+    // ==========================================
     function renderExpensesView() {
       const container = document.getElementById('app-content');
+      const totalExp = state.expenses.reduce((s, e) => s + e.amount, 0);
+
       container.innerHTML = `
-        <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mb-3">Dépenses de l'Exploitation</h2>
-        <div class="space-y-2">
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center text-xs">
-            <div>
-              <p class="font-bold text-white">Achat paille de blé (300 kg)</p>
-              <p class="text-[10px] text-[#888]">15 Sep • Fournisseur Blida</p>
-            </div>
-            <span class="text-[#e07a7a] font-bold">-4 500 DA</span>
+        <div class="flex justify-between items-center mb-1">
+          <div>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Dépenses Exploitation</h2>
+            <p class="text-[10px] text-[#888]">Total engagé : <strong>${totalExp.toLocaleString()} DA</strong></p>
           </div>
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center text-xs">
-            <div>
-              <p class="font-bold text-white">Alcool 70° & désinfectant</p>
-              <p class="text-[10px] text-[#888]">18 Sep • Pharmacie centrale</p>
+          <button onclick="openNewExpenseModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+            <span>+</span> <span>Nouvelle Dépense</span>
+          </button>
+        </div>
+
+        <div class="space-y-2 mt-2">
+          ${state.expenses.map(e => `
+            <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center text-xs">
+              <div>
+                <p class="font-bold text-white">${e.label}</p>
+                <p class="text-[10px] text-[#888]">${e.date} • ${e.category}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[#e07a7a] font-bold text-sm">-${e.amount.toLocaleString()} DA</span>
+                <button onclick="deleteExpense('${e.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs">🗑️</button>
+              </div>
             </div>
-            <span class="text-[#e07a7a] font-bold">-2 625 DA</span>
-          </div>
+          `).join('')}
         </div>
       `;
     }
 
-    // Init
+    function openNewExpenseModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>💸</span> <span>Ajouter une Dépense d'Exploitation</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Enregistrez chaque achat pour un calcul exact de la marge nette.</p>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Motif / Justification *</label>
+            <input id="exp-label" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Achat chaux éteinte 25kg">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Montant en Dinars (DA) *</label>
+            <input id="exp-amount" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-base font-bold" placeholder="ex: 1500">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Catégorie</label>
+            <select id="exp-cat" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
+              <option value="Matière première">Matière première (Paille / Mycélium)</option>
+              <option value="Sanitation">Désinfection & Alcool</option>
+              <option value="Énergie">Électricité / Gaz / Eau</option>
+              <option value="Consommables">Sacs micro-perforés & scotch</option>
+              <option value="Transport">Carburant livraison</option>
+              <option value="Autre">Autre charge</option>
+            </select>
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewExpense()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Enregistrer</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveNewExpense() {
+      const label = document.getElementById('exp-label').value.trim();
+      const amount = parseFloat(document.getElementById('exp-amount').value) || 0;
+      const category = document.getElementById('exp-cat').value;
+      if (!label || amount <= 0) return alert('Veuillez renseigner le motif et un montant valide.');
+
+      state.expenses.unshift({
+        id: 'exp_' + Date.now(),
+        label,
+        amount,
+        category,
+        date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      });
+
+      saveState();
+      closeModal();
+      showToast('Dépense enregistrée !');
+    }
+
+    function deleteExpense(id) {
+      if (confirm('Supprimer cette dépense ?')) {
+        state.expenses = state.expenses.filter(e => e.id !== id);
+        saveState();
+        showToast('Dépense retirée.');
+      }
+    }
+
+    // ==========================================
+    // 6. NOUVELLE VENTE / LIVRAISON
+    // ==========================================
+    function openNewSaleModal(preselectedClientId = null) {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>🛒</span> <span>Créer une Vente & Livraison</span>
+        </h3>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Sélectionner le Client *</label>
+            <select id="sale-client-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="updateSalePriceHelper()">
+              ${state.clients.map(c => `
+                <option value="${c.id}" ${c.id === preselectedClientId ? 'selected' : ''}>
+                  ${c.name} (${c.price} DA/kg)
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Quantité (kg) *</label>
+              <input id="sale-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5.0" oninput="updateSalePriceHelper()">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Frais Livreur (DA)</label>
+              <input id="sale-fee" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="350">
+            </div>
+          </div>
+          <div id="sale-summary-box" class="bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d] text-xs">
+            <!-- Dynamically calculated -->
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewDelivery()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Valider la Vente</button>
+          </div>
+        </div>
+      `);
+      updateSalePriceHelper();
+    }
+
+    function updateSalePriceHelper() {
+      const cliId = document.getElementById('sale-client-id').value;
+      const client = state.clients.find(c => c.id === cliId);
+      const qty = parseFloat(document.getElementById('sale-qty').value) || 0;
+      if (!client) return;
+
+      const total = qty * client.price;
+      document.getElementById('sale-summary-box').innerHTML = `
+        <div class="flex justify-between text-[#aaa]"><span>Tarif unitaire :</span> <span class="text-white">${client.price} DA/kg</span></div>
+        <div class="flex justify-between text-[#aaa] mt-1"><span>Total à encaisser :</span> <strong class="text-[#7bc67e] text-sm">${total.toLocaleString()} DA</strong></div>
+      `;
+    }
+
+    function saveNewDelivery() {
+      const cliId = document.getElementById('sale-client-id').value;
+      const client = state.clients.find(c => c.id === cliId);
+      const qty = parseFloat(document.getElementById('sale-qty').value) || 0;
+      const fee = parseFloat(document.getElementById('sale-fee').value) || 0;
+
+      if (!client || qty <= 0) return alert('Veuillez saisir une quantité valide.');
+
+      state.deliveries.unshift({
+        id: 'deliv_' + Date.now(),
+        num: 'LIV-' + String(state.deliveries.length + 1).padStart(3, '0'),
+        clientName: client.name,
+        phone: client.phone,
+        address: client.address,
+        qty: qty,
+        price: client.price,
+        fee: fee,
+        status: 'pending'
+      });
+
+      saveState();
+      closeModal();
+      showToast(`Vente créée pour ${client.name} !`);
+    }
+
+    // ==========================================
+    // 7. VUE DU LIVREUR (ISOLATION STRICTE)
+    // ==========================================
+    function renderDeliveryView() {
+      const container = document.getElementById('app-content');
+      container.innerHTML = `
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase">🚚 Mes Courses Assignées</h2>
+          <span class="text-[10px] text-[#888]">${state.deliveries.length} livraisons</span>
+        </div>
+
+        <div class="space-y-3">
+          ${state.deliveries.map(d => {
+            const isConf = d.status === 'confirmed';
+            return `
+              <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border ${isConf ? 'border-[#4a9e4e]' : 'border-[#2d4a2d]'} space-y-2.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-[#888] font-bold font-mono">${d.num}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isConf ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40'}">
+                    ${isConf ? '✅ Livré & Encaissé' : '⏳ En cours'}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 class="font-bold text-white text-sm">${d.clientName}</h3>
+                  <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">🍄 ${d.qty} kg de pleurotes frais</p>
+                  <p class="text-xs text-[#aaa] mt-1">📍 ${d.address}</p>
+                </div>
+
+                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs flex justify-between">
+                  <span class="text-[#888]">Rémunération course :</span>
+                  <strong class="text-white text-sm">${d.fee} DA</strong>
+                </div>
+
+                ${!isConf ? `
+                  <div class="grid grid-cols-2 gap-2 pt-1">
+                    <a href="tel:${d.phone}" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+                      <span>📞</span> Appeler Client
+                    </a>
+                    <button onclick="alert('Itinéraire GPS vers : ' + '${d.address}')" class="py-2.5 bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
+                      <span>🗺️</span> GPS
+                    </button>
+                  </div>
+                  <button onclick="confirmDelivery('${d.id}')" class="w-full py-2.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40 font-bold rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-[#2e522e]">
+                    <span>✅</span> Confirmer Livraison effectuée
+                  </button>
+                ` : `
+                  <div class="text-center py-1 text-xs text-[#7bc67e] font-bold">
+                    ✓ Course complétée
+                  </div>
+                `}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function confirmDelivery(id) {
+      const d = state.deliveries.find(x => x.id === id);
+      if (d) {
+        d.status = 'confirmed';
+        saveState();
+        showToast('Livraison validée avec succès !');
+      }
+    }
+
+    // ==========================================
+    // SCANNER QR SIMULÉ
+    // ==========================================
+    function openScanModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 text-center">📷 Scanner QR Sac de Culture</h3>
+        <p class="text-xs text-[#888] text-center mb-3">Sélectionnez un sac pour simuler le scan de son QR code :</p>
+        <div class="space-y-2 max-h-60 overflow-y-auto">
+          ${state.bags.map(b => `
+            <button onclick="closeModal(); switchTab('bags'); showToast('Sac scanné : ' + '${b.id}');" class="w-full text-left bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center hover:border-[#7bc67e]">
+              <div>
+                <span class="font-mono text-white font-bold">${b.id}</span>
+                <span class="text-[10px] text-[#888] block">${b.strain} • ${b.weight}kg</span>
+              </div>
+              <span class="text-[#7bc67e] font-bold text-[10px]">${b.status}</span>
+            </button>
+          `).join('')}
+        </div>
+        <button onclick="closeModal()" class="w-full mt-3 py-2.5 bg-[#2d4a2d] rounded-xl text-white text-xs font-bold">Fermer</button>
+      `);
+    }
+
+    // Helpers Modal
+    function showModal(content) {
+      document.getElementById('modal-container').innerHTML = content;
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+    }
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.add('hidden');
+    }
+
+    function updateClock() {
+      const d = new Date();
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      const el = document.getElementById('live-clock');
+      if (el) el.innerText = `${h}:${m}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Démarrage initial
+    checkAlerts();
     setRole('admin');
   </script>
 </body>
