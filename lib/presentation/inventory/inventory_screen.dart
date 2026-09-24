@@ -7,6 +7,8 @@ import '../../data/models/inventory_item_model.dart';
 import '../../data/models/inventory_movement_model.dart';
 import '../providers/app_providers.dart';
 
+enum ExpenseFilterMode { recent5, today, month, stock, operational, all, date }
+
 class InventoryScreen extends ConsumerStatefulWidget {
   final int initialTabIndex;
   const InventoryScreen({super.key, this.initialTabIndex = 0});
@@ -17,6 +19,8 @@ class InventoryScreen extends ConsumerStatefulWidget {
 
 class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  ExpenseFilterMode _expenseFilterMode = ExpenseFilterMode.recent5;
+  DateTime? _expenseSelectedDate;
 
   final List<String> _customUnits = ['kg', 'unités', 'Litres', 'g', 'bottes', 'rouleaux', 'sacs', 'cartons'];
   final List<String> _customCategories = [
@@ -236,90 +240,278 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
   // -------------------------------------------------------------
   // TAB DÉPENSES & ACHATS
   // -------------------------------------------------------------
+  List<ExpenseModel> _applyExpenseFilters(List<ExpenseModel> allExpenses) {
+    final sorted = List<ExpenseModel>.from(allExpenses)
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    final now = DateTime.now();
+    if (_expenseFilterMode == ExpenseFilterMode.date && _expenseSelectedDate != null) {
+      return sorted.where((e) =>
+          e.date.year == _expenseSelectedDate!.year &&
+          e.date.month == _expenseSelectedDate!.month &&
+          e.date.day == _expenseSelectedDate!.day).toList();
+    } else if (_expenseFilterMode == ExpenseFilterMode.today) {
+      return sorted.where((e) =>
+          e.date.year == now.year &&
+          e.date.month == now.month &&
+          e.date.day == now.day).toList();
+    } else if (_expenseFilterMode == ExpenseFilterMode.month) {
+      return sorted.where((e) =>
+          e.date.year == now.year &&
+          e.date.month == now.month).toList();
+    } else if (_expenseFilterMode == ExpenseFilterMode.stock) {
+      return sorted.where((e) => e.isStockable).toList();
+    } else if (_expenseFilterMode == ExpenseFilterMode.operational) {
+      return sorted.where((e) => !e.isStockable).toList();
+    } else if (_expenseFilterMode == ExpenseFilterMode.recent5) {
+      return sorted.take(5).toList();
+    }
+    return sorted;
+  }
+
+  Future<void> _pickExpenseDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expenseSelectedDate ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      helpText: 'Filtrer les achats par date',
+      confirmText: 'Filtrer',
+      cancelText: 'Annuler',
+    );
+    if (picked != null) {
+      setState(() {
+        _expenseSelectedDate = picked;
+        _expenseFilterMode = ExpenseFilterMode.date;
+      });
+    }
+  }
+
+  void _clearExpenseDateFilter() {
+    setState(() {
+      _expenseSelectedDate = null;
+      _expenseFilterMode = ExpenseFilterMode.recent5;
+    });
+  }
+
+  Widget _buildExpenseFilterChip({required String label, required ExpenseFilterMode mode}) {
+    final isSelected = _expenseFilterMode == mode;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      selectedColor: AppConstants.primaryGreen.withOpacity(0.25),
+      backgroundColor: AppConstants.cardDark,
+      labelStyle: TextStyle(
+        fontSize: 11,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected ? AppConstants.accentGreen : const Color(0xFFAAAAAA),
+      ),
+      onSelected: (_) {
+        setState(() {
+          _expenseFilterMode = mode;
+          if (mode != ExpenseFilterMode.date) {
+            _expenseSelectedDate = null;
+          }
+        });
+      },
+    );
+  }
+
   Widget _buildExpensesTab(List<ExpenseModel> expenses) {
-    final totalExpenses = expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
-    final totalStockPurchases = expenses.where((e) => e.isStockable).fold<double>(0.0, (sum, e) => sum + e.amount);
-    final totalOperational = totalExpenses - totalStockPurchases;
+    final displayedExpenses = _applyExpenseFilters(expenses);
+    final subTotal = displayedExpenses.fold<double>(0.0, (sum, e) => sum + e.amount);
+    final hasMoreThan5 = expenses.length > 5;
+    final isLimitedTo5 = _expenseFilterMode == ExpenseFilterMode.recent5 && hasMoreThan5;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // KPI Résumé Dépenses
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppConstants.cardDark,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppConstants.borderDark),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Achats Stock', style: TextStyle(color: Color(0xFF888888), fontSize: 11)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${totalStockPurchases.toStringAsFixed(0)} DA',
-                      style: const TextStyle(color: AppConstants.accentGreen, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const Text('Paille, blanc, sacs...', style: TextStyle(color: Color(0xFF666666), fontSize: 9)),
-                  ],
+        // Barre de filtres ultra-compacte (1 seule ligne avec scroll rapide + sélecteur calendrier)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppConstants.cardDark,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppConstants.borderDark),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildExpenseFilterChip(
+                        label: '⏱️ 5 Derniers',
+                        mode: ExpenseFilterMode.recent5,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildExpenseFilterChip(
+                        label: '📅 Aujourd\'hui',
+                        mode: ExpenseFilterMode.today,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildExpenseFilterChip(
+                        label: '🗓️ Ce mois',
+                        mode: ExpenseFilterMode.month,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildExpenseFilterChip(
+                        label: '📦 Stocks (${expenses.where((e) => e.isStockable).length})',
+                        mode: ExpenseFilterMode.stock,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildExpenseFilterChip(
+                        label: '⚡ Charges (${expenses.where((e) => !e.isStockable).length})',
+                        mode: ExpenseFilterMode.operational,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildExpenseFilterChip(
+                        label: '📜 Tout (${expenses.length})',
+                        mode: ExpenseFilterMode.all,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppConstants.cardDark,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppConstants.borderDark),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Frais d\'Exploitation', style: TextStyle(color: Color(0xFF888888), fontSize: 11)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${totalOperational.toStringAsFixed(0)} DA',
-                      style: const TextStyle(color: AppConstants.alertRed, fontWeight: FontWeight.bold, fontSize: 16),
+              const SizedBox(width: 6),
+              // Bouton Calendrier compact
+              InkWell(
+                onTap: () => _pickExpenseDate(context),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _expenseSelectedDate != null
+                        ? AppConstants.primaryGreen.withOpacity(0.15)
+                        : AppConstants.backgroundDark,
+                    border: Border.all(
+                      color: _expenseSelectedDate != null
+                          ? AppConstants.primaryGreen
+                          : AppConstants.borderDark,
                     ),
-                    const Text('Sonelgaz, carburant...', style: TextStyle(color: Color(0xFF666666), fontSize: 9)),
-                  ],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month, size: 16, color: AppConstants.primaryGreen),
+                      const SizedBox(width: 4),
+                      Text(
+                        _expenseSelectedDate != null
+                            ? '${_expenseSelectedDate!.day}/${_expenseSelectedDate!.month}'
+                            : 'Date',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: _expenseSelectedDate != null ? FontWeight.bold : FontWeight.normal,
+                          color: _expenseSelectedDate != null ? AppConstants.accentGreen : Colors.white,
+                        ),
+                      ),
+                      if (_expenseSelectedDate != null) ...[
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: _clearExpenseDateFilter,
+                          child: const Icon(Icons.close, size: 14, color: AppConstants.alertRed),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
+        // En-tête avec statut du filtre actif & sous-total
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Historique des Achats & Frais :',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppConstants.accentGreen),
+            Text(
+              _expenseFilterMode == ExpenseFilterMode.recent5
+                  ? '5 Derniers Achats :'
+                  : (_expenseFilterMode == ExpenseFilterMode.date && _expenseSelectedDate != null
+                      ? 'Achats du ${_expenseSelectedDate!.day}/${_expenseSelectedDate!.month} :'
+                      : (_expenseFilterMode == ExpenseFilterMode.today
+                          ? 'Achats d\'Aujourd\'hui :'
+                          : (_expenseFilterMode == ExpenseFilterMode.month
+                              ? 'Achats de ce mois :'
+                              : (_expenseFilterMode == ExpenseFilterMode.stock
+                                  ? 'Achats de Stocks :'
+                                  : (_expenseFilterMode == ExpenseFilterMode.operational
+                                      ? 'Frais d\'Exploitation :'
+                                      : 'Tous les Achats :'))))),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppConstants.accentGreen),
             ),
             Text(
-              'Total : ${totalExpenses.toStringAsFixed(0)} DA',
+              'Total : ${subTotal.toStringAsFixed(0)} DA',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ],
         ),
         const SizedBox(height: 10),
 
-        if (expenses.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Text('Aucune dépense enregistrée.', style: TextStyle(color: Color(0xFF888888))),
+        if (displayedExpenses.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Column(
+              children: [
+                const Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFF666666)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Aucun achat trouvé pour ce filtre.',
+                  style: TextStyle(color: Color(0xFF888888), fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _expenseSelectedDate = null;
+                      _expenseFilterMode = ExpenseFilterMode.recent5;
+                    });
+                  },
+                  child: const Text('Réinitialiser aux 5 derniers', style: TextStyle(color: AppConstants.accentGreen)),
+                ),
+              ],
             ),
           )
-        else
-          ...expenses.map((e) => _buildExpenseCard(e)),
+        else ...[
+          ...displayedExpenses.map((e) => _buildExpenseCard(e)),
+
+          if (isLimitedTo5) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.history, color: AppConstants.accentGreen),
+                label: Text(
+                  'Afficher les ${expenses.length - 5} achats plus anciens ↓',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppConstants.accentGreen),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: const BorderSide(color: AppConstants.accentGreen),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  setState(() => _expenseFilterMode = ExpenseFilterMode.all);
+                },
+              ),
+            ),
+          ],
+
+          if (_expenseFilterMode == ExpenseFilterMode.all && hasMoreThan5) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              icon: const Icon(Icons.keyboard_arrow_up, color: AppConstants.accentGreen),
+              label: const Text('Réduire aux 5 derniers achats', style: TextStyle(color: AppConstants.accentGreen)),
+              onPressed: () {
+                setState(() => _expenseFilterMode = ExpenseFilterMode.recent5);
+              },
+            ),
+          ],
+        ],
 
         const SizedBox(height: 80),
       ],
@@ -448,9 +640,39 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Seuil critique : ${item.alertThreshold} ${item.unit} • ${item.unitCost.toStringAsFixed(0)} DA / ${item.unit}',
-                      style: const TextStyle(color: Color(0xFF888888), fontSize: 12),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        InkWell(
+                          onTap: () => _showEditThresholdDialog(context, item),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppConstants.backgroundDark,
+                              border: Border.all(color: AppConstants.accentGreen.withOpacity(0.4)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Seuil : ${item.alertThreshold} ${item.unit}',
+                                  style: const TextStyle(color: Color(0xFFDDDDDD), fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.edit, size: 11, color: AppConstants.accentGreen),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '• ${item.unitCost.toStringAsFixed(0)} DA / ${item.unit}',
+                          style: const TextStyle(color: Color(0xFF888888), fontSize: 11),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -475,7 +697,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                         ),
                     ],
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.tune, color: Color(0xFFAAAAAA), size: 18),
+                    tooltip: 'Modifier seuil & coût',
+                    onPressed: () => _showEditThresholdDialog(context, item),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Color(0xFF888888), size: 18),
                     tooltip: 'Supprimer article',
@@ -1061,6 +1288,105 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
               if (ctx.mounted) Navigator.of(ctx).pop();
             },
             child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditThresholdDialog(BuildContext context, InventoryItemModel item) {
+    final nameCtrl = TextEditingController(text: item.name);
+    final thresholdCtrl = TextEditingController(text: item.alertThreshold.toString());
+    final costCtrl = TextEditingController(text: item.unitCost.toString());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppConstants.cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppConstants.borderDark),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.tune, color: AppConstants.accentGreen, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Paramètres & Seuil Stock',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${item.name} (${item.unit})',
+                style: const TextStyle(color: AppConstants.accentGreen, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildDarkInput(controller: nameCtrl, label: 'Désignation de l\'article'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDarkInput(
+                      controller: thresholdCtrl,
+                      label: 'Seuil alerte (${item.unit})',
+                      keyboard: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildDarkInput(
+                      controller: costCtrl,
+                      label: 'Coût DA / ${item.unit}',
+                      keyboard: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler', style: TextStyle(color: Color(0xFF888888))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppConstants.primaryGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final newName = nameCtrl.text.trim();
+              final newThreshold = double.tryParse(thresholdCtrl.text) ?? item.alertThreshold;
+              final newCost = double.tryParse(costCtrl.text) ?? item.unitCost;
+
+              final updated = item.copyWith(
+                name: newName.isNotEmpty ? newName : item.name,
+                alertThreshold: newThreshold,
+                unitCost: newCost,
+              );
+
+              await ref.read(inventoryRepositoryProvider).updateItem(updated);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Seuil et paramètres mis à jour !'),
+                    backgroundColor: AppConstants.primaryGreen,
+                  ),
+                );
+              }
+            },
+            child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

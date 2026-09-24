@@ -241,6 +241,26 @@ class InventoryRepository {
     _itemsController.add(List.unmodifiable(_localItems));
   }
 
+  Future<void> updateItem(InventoryItemModel item) async {
+    final index = _localItems.indexWhere((i) => i.id == item.id);
+    if (index != -1) {
+      final isLow = MycoCalculations.isStockLow(
+        currentQuantity: item.currentStock,
+        alertThreshold: item.alertThreshold,
+      );
+      final updated = item.copyWith(
+        isLowStock: isLow,
+        updatedAt: DateTime.now(),
+      );
+      _localItems[index] = updated;
+      _itemsController.add(List.unmodifiable(_localItems));
+
+      if (_firestore != null) {
+        await _firestore.collection('inventory_items').doc(item.id).update(updated.toMap());
+      }
+    }
+  }
+
   Future<void> deleteItem(String id) async {
     if (_firestore != null) {
       await _firestore.collection('inventory_items').doc(id).delete();

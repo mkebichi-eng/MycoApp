@@ -21,14 +21,6 @@ class SalesScreen extends ConsumerStatefulWidget {
 class _SalesScreenState extends ConsumerState<SalesScreen> {
   SalesFilterMode _filterMode = SalesFilterMode.recent5;
   DateTime? _selectedDate;
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
 
   List<SaleModel> _applyFilters(List<SaleModel> originalSales) {
     // 1. Tri par date décroissante (plus récentes en premier)
@@ -37,15 +29,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 
     var filtered = sorted;
 
-    // 2. Recherche textuelle
-    if (_searchQuery.trim().isNotEmpty) {
-      final q = _searchQuery.trim().toLowerCase();
-      filtered = filtered.where((s) =>
-          s.clientName.toLowerCase().contains(q) ||
-          s.saleNumber.toLowerCase().contains(q)).toList();
-    }
-
-    // 3. Filtrage selon le mode
+    // 2. Filtrage selon le mode ou la date
     if (_filterMode == SalesFilterMode.date && _selectedDate != null) {
       filtered = filtered.where((s) =>
           s.date.year == _selectedDate!.year &&
@@ -183,102 +167,84 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Panneau de Recherche & Filtres Ergonomiques
+          // Barre de filtres ultra-compacte (1 seule ligne avec scroll rapide + sélecteur calendrier)
           Card(
             elevation: 1,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
                 children: [
-                  // 1. Recherche par mot-clé (Client / N°)
-                  TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Rechercher client, N° vente...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                    ),
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // 2. Recherche par Date (Calendrier)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _pickDate(context),
-                          icon: const Icon(Icons.calendar_month, size: 18),
-                          label: Text(
-                            _selectedDate != null
-                                ? 'Date : ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
-                                : 'Filtrer par date (Calendrier)',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: _selectedDate != null ? FontWeight.bold : FontWeight.normal,
-                            ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip(
+                            label: '⏱️ 5 Dernières',
+                            mode: SalesFilterMode.recent5,
                           ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _selectedDate != null ? AppConstants.primaryGreen : Colors.black87,
-                            side: BorderSide(
-                              color: _selectedDate != null ? AppConstants.primaryGreen : Colors.grey.shade300,
-                              width: _selectedDate != null ? 1.5 : 1,
-                            ),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          const SizedBox(width: 6),
+                          _buildFilterChip(
+                            label: '📅 Aujourd\'hui',
+                            mode: SalesFilterMode.today,
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          _buildFilterChip(
+                            label: '🔴 Impayés',
+                            mode: SalesFilterMode.unpaid,
+                          ),
+                          const SizedBox(width: 6),
+                          _buildFilterChip(
+                            label: '📜 Tout',
+                            mode: SalesFilterMode.all,
+                          ),
+                        ],
                       ),
-                      if (_selectedDate != null) ...[
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
-                          tooltip: 'Effacer filtre date',
-                          onPressed: _clearDateFilter,
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // 3. Raccourcis et filtres rapides (Pills)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip(
-                          label: '⏱️ 5 Dernières',
-                          mode: SalesFilterMode.recent5,
+                  const SizedBox(width: 6),
+                  // Bouton Calendrier compact
+                  InkWell(
+                    onTap: () => _pickDate(context),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _selectedDate != null
+                            ? AppConstants.primaryGreen.withOpacity(0.15)
+                            : Colors.grey.shade100,
+                        border: Border.all(
+                          color: _selectedDate != null
+                              ? AppConstants.primaryGreen
+                              : Colors.grey.shade300,
                         ),
-                        const SizedBox(width: 6),
-                        _buildFilterChip(
-                          label: '📅 Aujourd\'hui',
-                          mode: SalesFilterMode.today,
-                        ),
-                        const SizedBox(width: 6),
-                        _buildFilterChip(
-                          label: '🔴 Impayés',
-                          mode: SalesFilterMode.unpaid,
-                        ),
-                        const SizedBox(width: 6),
-                        _buildFilterChip(
-                          label: '📜 Tout l\'historique',
-                          mode: SalesFilterMode.all,
-                        ),
-                      ],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_month, size: 16, color: AppConstants.primaryGreen),
+                          const SizedBox(width: 4),
+                          Text(
+                            _selectedDate != null
+                                ? '${_selectedDate!.day}/${_selectedDate!.month}'
+                                : 'Date',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: _selectedDate != null ? FontWeight.bold : FontWeight.normal,
+                              color: _selectedDate != null ? AppConstants.primaryGreen : Colors.black87,
+                            ),
+                          ),
+                          if (_selectedDate != null) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: _clearDateFilter,
+                              child: const Icon(Icons.close, size: 14, color: Colors.red),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -329,9 +295,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       const SizedBox(height: 12),
                       OutlinedButton(
                         onPressed: () {
-                          _searchCtrl.clear();
                           setState(() {
-                            _searchQuery = '';
                             _selectedDate = null;
                             _filterMode = SalesFilterMode.recent5;
                           });

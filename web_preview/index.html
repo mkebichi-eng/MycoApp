@@ -767,21 +767,8 @@
       const todayCount = state.deliveries.filter(d => (d.dateIso && d.dateIso === todayIso) || (d.createdAt && d.createdAt.includes('24 Sep'))).length;
       const unpaidCount = state.deliveries.filter(d => (d.clientRemainingDue && d.clientRemainingDue > 0) || (!d.isClientPaid && d.status === 'settled')).length;
 
-      // 1. Filtrage selon texte de recherche
+      // Filtrage selon mode ou date sélectionnée
       let filtered = [...state.deliveries];
-      if (salesSearchQuery.trim()) {
-        const q = salesSearchQuery.trim().toLowerCase();
-        filtered = filtered.filter(d => 
-          (d.clientName && d.clientName.toLowerCase().includes(q)) ||
-          (d.orderNumber && d.orderNumber.toLowerCase().includes(q)) ||
-          (d.delivererName && d.delivererName.toLowerCase().includes(q)) ||
-          (d.createdAt && d.createdAt.toLowerCase().includes(q)) ||
-          (d.dateIso && d.dateIso.includes(q))
-        );
-      }
-
-      // 2. Filtrage selon mode ou date sélectionnée
-      let isTruncated5 = false;
       if (salesFilterMode === 'date' && salesDateFilter) {
         filtered = filtered.filter(d => 
           (d.dateIso && d.dateIso === salesDateFilter) ||
@@ -798,7 +785,6 @@
         );
       } else if (salesFilterMode === 'recent5') {
         if (filtered.length > 5) {
-          isTruncated5 = true;
           filtered = filtered.slice(0, 5);
         }
       }
@@ -815,57 +801,33 @@
           </button>
         </div>
 
-        <!-- Panneau de recherche & filtres ergonomiques -->
-        <div class="bg-[#1a2a1a] p-2.5 rounded-2xl border border-[#2d4a2d] space-y-2 mt-2">
-          <!-- 1. Recherche par texte libre (client, N° vente, etc.) -->
-          <div class="relative">
-            <span class="absolute left-3 top-2.5 text-xs text-[#888]">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Rechercher client, N° vente, date..." 
-              value="${salesSearchQuery}" 
-              oninput="onSalesSearchInput(this.value)"
-              class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#666] focus:border-[#7bc67e] outline-none"
-            />
-            ${salesSearchQuery ? `
-              <button onclick="onSalesSearchInput('');" class="absolute right-2.5 top-2 text-xs text-[#888] hover:text-white">✕</button>
-            ` : ''}
-          </div>
-
-          <!-- 2. Recherche par Date précise (Calendrier) -->
-          <div class="flex items-center gap-2">
-            <div class="flex-1 flex items-center bg-[#0f1a0f] border ${salesDateFilter ? 'border-[#7bc67e]' : 'border-[#2d4a2d]'} rounded-xl px-2.5 py-1.5">
-              <span class="text-xs mr-2">📅</span>
-              <label class="text-[10px] text-[#888] mr-2">Filtrer par date :</label>
-              <input 
-                type="date" 
-                value="${salesDateFilter}" 
-                onchange="onSalesDateChange(this.value)"
-                class="bg-transparent text-xs text-white outline-none cursor-pointer flex-1"
-              />
-              ${salesDateFilter ? `
-                <button onclick="clearSalesDateFilter()" class="text-xs text-[#e07a7a] hover:text-red-400 font-bold ml-1.5" title="Effacer le filtre">✕</button>
-              ` : ''}
-            </div>
-          </div>
-
-          <!-- 3. Raccourcis et filtres rapides (Solutions proposées) -->
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[11px]">
-            <button onclick="setSalesFilterMode('recent5')" class="px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${salesFilterMode === 'recent5' ? 'bg-[#7bc67e] text-[#0f1a0f] font-bold shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+        <!-- Barre de filtres ultra-compacte (1 seule ligne rapide) -->
+        <div class="bg-[#1a2a1a] p-1.5 rounded-2xl border border-[#2d4a2d] flex items-center justify-between gap-1.5 mt-2 text-[11px] select-none">
+          <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1">
+            <button onclick="setSalesFilterMode('recent5')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${salesFilterMode === 'recent5' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
               ⏱️ 5 Dernières
             </button>
-
-            <button onclick="setSalesFilterMode('today')" class="px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${salesFilterMode === 'today' ? 'bg-[#7bc67e] text-[#0f1a0f] font-bold shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+            <button onclick="setSalesFilterMode('today')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${salesFilterMode === 'today' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
               📅 Aujourd'hui (${todayCount})
             </button>
-
-            <button onclick="setSalesFilterMode('unpaid')" class="px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${salesFilterMode === 'unpaid' ? 'bg-red-500 text-white font-bold shadow' : 'bg-[#0f1a0f] text-[#e07a7a] border border-[#2d4a2d] hover:border-red-500/50'}">
-              🔴 Reste à payer (${unpaidCount})
+            <button onclick="setSalesFilterMode('unpaid')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${salesFilterMode === 'unpaid' ? 'bg-red-500 text-white shadow' : 'bg-[#0f1a0f] text-[#e07a7a] border border-[#2d4a2d] hover:border-red-500/50'}">
+              🔴 Impayés (${unpaidCount})
             </button>
-
-            <button onclick="setSalesFilterMode('all')" class="px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${salesFilterMode === 'all' ? 'bg-[#7bc67e] text-[#0f1a0f] font-bold shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+            <button onclick="setSalesFilterMode('all')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${salesFilterMode === 'all' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
               📜 Tout (${state.deliveries.length})
             </button>
+          </div>
+
+          <!-- Bouton Calendrier compact -->
+          <div class="relative flex items-center flex-shrink-0">
+            <label class="px-2 py-1 rounded-lg font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${salesFilterMode === 'date' && salesDateFilter ? 'bg-[#2d5a2d] text-white border border-[#7bc67e]' : 'bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] hover:text-white'}">
+              <span>🗓️</span>
+              <span>${salesDateFilter ? formatDisplayDate(salesDateFilter) : 'Date'}</span>
+              <input type="date" value="${salesDateFilter}" onchange="onSalesDateChange(this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            </label>
+            ${salesDateFilter ? `
+              <button onclick="clearSalesDateFilter()" class="ml-1 text-xs text-red-400 hover:text-red-300 font-bold px-1" title="Effacer date">✕</button>
+            ` : ''}
           </div>
         </div>
 
@@ -1844,9 +1806,33 @@
     // ==========================================
     // 6. GESTION FUSIONNÉE : STOCKS & ACHATS
     // ==========================================
-    let expenseFilterMode = 'all'; // 'all' | 'stock' | 'operational'
+    // ==========================================
+    // 6. GESTION FUSIONNÉE : STOCKS & ACHATS
+    // ==========================================
+    let expenseFilterMode = 'recent5'; // 'recent5' | 'today' | 'month' | 'stock' | 'operational' | 'all' | 'date'
+    let expenseDateFilter = '';
+
     function setExpenseFilterMode(mode) {
       expenseFilterMode = mode;
+      if (mode !== 'date') {
+        expenseDateFilter = '';
+      }
+      renderStockView();
+    }
+
+    function onExpenseDateChange(val) {
+      expenseDateFilter = val;
+      if (val) {
+        expenseFilterMode = 'date';
+      } else {
+        expenseFilterMode = 'recent5';
+      }
+      renderStockView();
+    }
+
+    function clearExpenseDateFilter() {
+      expenseDateFilter = '';
+      expenseFilterMode = 'recent5';
       renderStockView();
     }
 
@@ -1855,7 +1841,6 @@
       
       const totalStockItems = state.stocks.length;
       const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
-      const estimatedStockVal = state.stocks.reduce((sum, s) => sum + ((s.quantity || 0) * (s.cost || 0)), 0);
       const totalExpenses = state.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
       container.innerHTML = `
@@ -1900,25 +1885,28 @@
           </button>
         </div>
 
-        ${stockSubTab === 'stocks' ? renderStocksSubViewHtml(estimatedStockVal, lowCount) : renderExpensesSubViewHtml(totalExpenses)}
+        ${stockSubTab === 'stocks' ? renderStocksSubViewHtml(lowCount) : renderExpensesSubViewHtml(totalExpenses)}
       `;
     }
 
-    function renderStocksSubViewHtml(estimatedVal, lowCount) {
+    function renderStocksSubViewHtml(lowCount) {
       return `
-        <!-- KPI Résumé Stock -->
-        <div class="grid grid-cols-2 gap-2 mb-2.5">
-          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
-            <p class="text-[10px] text-[#888]">Valeur estimée du stock</p>
-            <p class="text-sm font-bold text-[#7bc67e] mt-0.5">${estimatedVal.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Calculé au coût d'achat</p>
+        <!-- Statut du Stock (Alerte uniquement si nécessaire, sans estimation inutile) -->
+        ${lowCount > 0 ? `
+          <div class="mb-2.5 p-2 bg-[#2a1a1a]/70 border border-[#5a2a2a] rounded-xl flex items-center justify-between text-xs text-[#e07a7a]">
+            <span class="flex items-center gap-1.5 font-bold">
+              <span>⚠️</span> <span>${lowCount} article(s) sous le seuil d'alerte critique</span>
+            </span>
+            <span class="text-[10px] text-red-300 font-semibold">Réapprovisionnement requis</span>
           </div>
-          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border ${lowCount > 0 ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'}">
-            <p class="text-[10px] ${lowCount > 0 ? 'text-[#e07a7a]' : 'text-[#888]'}">Articles sous le seuil</p>
-            <p class="text-sm font-bold ${lowCount > 0 ? 'text-red-400' : 'text-white'} mt-0.5">${lowCount} critique(s)</p>
-            <p class="text-[9px] text-[#666] mt-0.5">${lowCount > 0 ? 'Réapprovisionnement requis' : 'Tous stocks suffisants'}</p>
+        ` : `
+          <div class="mb-2.5 px-2.5 py-1.5 bg-[#142214] border border-[#2d4a2d] rounded-xl flex items-center justify-between text-[11px] text-[#7bc67e]">
+            <span class="flex items-center gap-1.5">
+              <span>🟢</span> <span>Tous les stocks sont au-dessus du seuil limite</span>
+            </span>
+            <span class="text-[10px] text-[#888]">${state.stocks.length} articles suivis</span>
           </div>
-        </div>
+        `}
 
         <!-- Liste des Articles en Stock -->
         <div class="space-y-2">
@@ -1937,15 +1925,26 @@
                       <h3 class="font-bold text-white text-xs">${s.name}</h3>
                       <span class="text-[9px] text-[#888] bg-[#0f1a0f] border border-[#2d4a2d] px-1.5 py-0.5 rounded font-medium">${s.category || 'Intrant'}</span>
                     </div>
-                    <p class="text-[11px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-slate-300'} mt-1">
-                      Stock actuel : <strong class="text-sm text-white">${s.quantity} ${s.unit}</strong>
-                      <span class="text-[#888] text-[10px] ml-1">(Seuil critique : ${s.threshold} ${s.unit})</span>
-                    </p>
+
+                    <!-- Stock actuel & Seuil limite modifiable d'un clic -->
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                      <p class="text-[11px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-slate-300'}">
+                        Stock actuel : <strong class="text-sm text-white">${s.quantity} ${s.unit}</strong>
+                      </p>
+                      <button onclick="openEditThresholdModal('${s.id}')" class="text-[10px] bg-[#0f1a0f] hover:bg-[#1f2f1f] text-slate-300 hover:text-[#7bc67e] border border-[#2d4a2d] hover:border-[#7bc67e] px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all" title="Changer le seuil d'alerte">
+                        <span>Seuil alerte : <strong>${s.threshold} ${s.unit}</strong></span>
+                        <span class="text-[10px]">✏️</span>
+                      </button>
+                    </div>
+
                     <p class="text-[10px] text-[#888] mt-0.5">
                       Coût d'achat moyen : <strong class="text-[#7bc67e] font-mono">${s.cost || 0} DA / ${s.unit}</strong>
                     </p>
                   </div>
-                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer">🗑️</button>
+                  <div class="flex items-center gap-0.5">
+                    <button onclick="openEditThresholdModal('${s.id}')" class="text-slate-400 hover:text-[#7bc67e] text-xs p-1" title="Modifier seuil & coût">⚙️</button>
+                    <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer">🗑️</button>
+                  </div>
                 </div>
 
                 <!-- Actions directes : Entrée, Sortie, et Réapprovisionnement/Achat -->
@@ -1968,42 +1967,87 @@
     }
 
     function renderExpensesSubViewHtml(totalExpenses) {
-      const stockPurchasesTotal = state.expenses.filter(e => e.isStockable).reduce((s, e) => s + e.amount, 0);
-      const operationalTotal = totalExpenses - stockPurchasesTotal;
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const currentMonthPrefix = todayIso.slice(0, 7); // 'YYYY-MM'
 
       let filtered = [...state.expenses];
-      if (expenseFilterMode === 'stock') {
+
+      if (expenseFilterMode === 'date' && expenseDateFilter) {
+        filtered = filtered.filter(e => 
+          (e.dateIso && e.dateIso === expenseDateFilter) ||
+          (e.date && e.date.includes(formatDisplayDate(expenseDateFilter)))
+        );
+      } else if (expenseFilterMode === 'today') {
+        filtered = filtered.filter(e => 
+          (e.dateIso && e.dateIso === todayIso) ||
+          (e.date && e.date.includes('24 Sep'))
+        );
+      } else if (expenseFilterMode === 'month') {
+        filtered = filtered.filter(e => 
+          (e.dateIso && e.dateIso.startsWith(currentMonthPrefix)) ||
+          (e.date && (e.date.includes('Sep') || e.date.includes('09')))
+        );
+      } else if (expenseFilterMode === 'stock') {
         filtered = filtered.filter(e => e.isStockable);
       } else if (expenseFilterMode === 'operational') {
         filtered = filtered.filter(e => !e.isStockable);
+      } else if (expenseFilterMode === 'recent5') {
+        if (filtered.length > 5) {
+          filtered = filtered.slice(0, 5);
+        }
       }
 
+      const subTotal = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+
       return `
-        <!-- KPI Résumé Dépenses -->
-        <div class="grid grid-cols-2 gap-2 mb-2.5">
-          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
-            <p class="text-[10px] text-[#888]">Achats de matières & stock</p>
-            <p class="text-sm font-bold text-[#7bc67e] mt-0.5">${stockPurchasesTotal.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Paille, blanc, sacs...</p>
+        <!-- Barre de filtres ultra-compacte Achats (1 seule ligne rapide) -->
+        <div class="bg-[#1a2a1a] p-1.5 rounded-2xl border border-[#2d4a2d] flex items-center justify-between gap-1.5 mb-2 text-[11px] select-none">
+          <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1">
+            <button onclick="setExpenseFilterMode('recent5')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'recent5' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              ⏱️ 5 Derniers
+            </button>
+            <button onclick="setExpenseFilterMode('today')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'today' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              📅 Aujourd'hui
+            </button>
+            <button onclick="setExpenseFilterMode('month')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'month' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              🗓️ Ce mois
+            </button>
+            <button onclick="setExpenseFilterMode('stock')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'stock' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              📦 Stocks (${state.expenses.filter(e => e.isStockable).length})
+            </button>
+            <button onclick="setExpenseFilterMode('operational')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'operational' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              ⚡ Charges (${state.expenses.filter(e => !e.isStockable).length})
+            </button>
+            <button onclick="setExpenseFilterMode('all')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${expenseFilterMode === 'all' ? 'bg-[#7bc67e] text-[#0f1a0f] shadow' : 'bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] hover:text-white'}">
+              📜 Tout (${state.expenses.length})
+            </button>
           </div>
-          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
-            <p class="text-[10px] text-[#888]">Charges & Exploitation</p>
-            <p class="text-sm font-bold text-[#e07a7a] mt-0.5">${operationalTotal.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Sonelgaz, carburant...</p>
+
+          <!-- Bouton Calendrier compact -->
+          <div class="relative flex items-center flex-shrink-0">
+            <label class="px-2 py-1 rounded-lg font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${expenseFilterMode === 'date' && expenseDateFilter ? 'bg-[#2d5a2d] text-white border border-[#7bc67e]' : 'bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] hover:text-white'}">
+              <span>🗓️</span>
+              <span>${expenseDateFilter ? formatDisplayDate(expenseDateFilter) : 'Date'}</span>
+              <input type="date" value="${expenseDateFilter}" onchange="onExpenseDateChange(this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            </label>
+            ${expenseDateFilter ? `
+              <button onclick="clearExpenseDateFilter()" class="ml-1 text-xs text-red-400 hover:text-red-300 font-bold px-1" title="Effacer date">✕</button>
+            ` : ''}
           </div>
         </div>
 
-        <!-- Filtres rapides -->
-        <div class="flex gap-1.5 mb-2.5 overflow-x-auto pb-1 text-[11px]">
-          <button onclick="setExpenseFilterMode('all')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'all' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
-            Toutes (${state.expenses.length})
-          </button>
-          <button onclick="setExpenseFilterMode('stock')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'stock' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
-            📦 Achats Stock (${state.expenses.filter(e => e.isStockable).length})
-          </button>
-          <button onclick="setExpenseFilterMode('operational')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'operational' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
-            ⚡ Charges Directes (${state.expenses.filter(e => !e.isStockable).length})
-          </button>
+        <!-- Indicateur de statut des achats affichés & sous-total -->
+        <div class="flex justify-between items-center px-1 text-[11px] text-[#888] mb-2">
+          <span>
+            ${expenseFilterMode === 'recent5' ? 'Affichage des <strong>5 derniers achats</strong>' :
+              (expenseFilterMode === 'date' ? `Achats du <strong>${formatDisplayDate(expenseDateFilter)}</strong>` :
+              (expenseFilterMode === 'today' ? 'Achats d\'<strong>aujourd\'hui</strong>' :
+              (expenseFilterMode === 'month' ? 'Achats de <strong>ce mois</strong>' :
+              (expenseFilterMode === 'stock' ? 'Achats pour le <strong>stock</strong>' :
+              (expenseFilterMode === 'operational' ? 'Charges d\'<strong>exploitation</strong>' :
+              '<strong>Tous les achats</strong>')))))}
+          </span>
+          <span class="text-[#7bc67e] font-mono font-bold">Total : ${subTotal.toLocaleString()} DA</span>
         </div>
 
         <!-- Liste des Dépenses & Achats -->
@@ -2182,6 +2226,57 @@
         saveState();
         showToast('Article supprimé.');
       }
+    }
+
+    function openEditThresholdModal(id) {
+      const item = state.stocks.find(s => s.id === id);
+      if (!item) return;
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>⚙️</span> <span>Seuil & Paramètres Stock</span>
+        </h3>
+        <p class="text-xs text-[#7bc67e] mb-3">${item.name} (${item.unit})</p>
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Désignation de l'article</label>
+            <input id="edit-stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${item.name}">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Seuil d'alerte critique (${item.unit})</label>
+              <input id="edit-stk-threshold" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2.5 text-white font-bold text-base" value="${item.threshold}">
+              <p class="text-[10px] text-[#888] mt-1">Alerte si stock &le; cette valeur</p>
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Coût unitaire (DA / ${item.unit})</label>
+              <input id="edit-stk-cost" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-base" value="${item.cost || 0}">
+              <p class="text-[10px] text-[#888] mt-1">Prix moyen d'achat</p>
+            </div>
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveEditedThreshold('${id}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Enregistrer</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveEditedThreshold(id) {
+      const item = state.stocks.find(s => s.id === id);
+      if (!item) return;
+
+      const newName = (document.getElementById('edit-stk-name').value || '').trim();
+      const newThreshold = parseFloat(document.getElementById('edit-stk-threshold').value);
+      const newCost = parseFloat(document.getElementById('edit-stk-cost').value);
+
+      if (newName) item.name = newName;
+      if (!isNaN(newThreshold) && newThreshold >= 0) item.threshold = newThreshold;
+      if (!isNaN(newCost) && newCost >= 0) item.cost = newCost;
+
+      saveState();
+      closeModal();
+      showToast('Seuil et paramètres mis à jour !');
     }
 
     // ==========================================
