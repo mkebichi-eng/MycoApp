@@ -288,6 +288,35 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
     }
   }
 
+  void _navigateExpenseDate(int offsetDays) {
+    final base = _expenseSelectedDate ?? (_expenseFilterMode == ExpenseFilterMode.today ? DateTime.now() : DateTime.now());
+    final newDate = base.add(Duration(days: offsetDays));
+    setState(() {
+      _expenseSelectedDate = newDate;
+      _expenseFilterMode = ExpenseFilterMode.date;
+    });
+  }
+
+  String _getExpenseDateDisplay() {
+    if (_expenseSelectedDate == null) {
+      if (_expenseFilterMode == ExpenseFilterMode.today) return 'Aujourd\'hui';
+      return 'Date';
+    }
+    final now = DateTime.now();
+    if (_expenseSelectedDate!.year == now.year &&
+        _expenseSelectedDate!.month == now.month &&
+        _expenseSelectedDate!.day == now.day) {
+      return 'Aujourd\'hui';
+    }
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (_expenseSelectedDate!.year == yesterday.year &&
+        _expenseSelectedDate!.month == yesterday.month &&
+        _expenseSelectedDate!.day == yesterday.day) {
+      return 'Hier';
+    }
+    return '${_expenseSelectedDate!.day}/${_expenseSelectedDate!.month}';
+  }
+
   void _clearExpenseDateFilter() {
     setState(() {
       _expenseSelectedDate = null;
@@ -376,47 +405,72 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                 ),
               ),
               const SizedBox(width: 6),
-              // Bouton Calendrier compact
-              InkWell(
-                onTap: () => _pickExpenseDate(context),
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
+              // Sélecteur de date ergonomique jour par jour (◀ Date ▶ ✕)
+              Container(
+                decoration: BoxDecoration(
+                  color: _expenseSelectedDate != null
+                      ? AppConstants.primaryGreen.withOpacity(0.12)
+                      : AppConstants.backgroundDark,
+                  border: Border.all(
                     color: _expenseSelectedDate != null
-                        ? AppConstants.primaryGreen.withOpacity(0.15)
-                        : AppConstants.backgroundDark,
-                    border: Border.all(
-                      color: _expenseSelectedDate != null
-                          ? AppConstants.primaryGreen
-                          : AppConstants.borderDark,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
+                        ? AppConstants.primaryGreen
+                        : AppConstants.borderDark,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.calendar_month, size: 16, color: AppConstants.primaryGreen),
-                      const SizedBox(width: 4),
-                      Text(
-                        _expenseSelectedDate != null
-                            ? '${_expenseSelectedDate!.day}/${_expenseSelectedDate!.month}'
-                            : 'Date',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: _expenseSelectedDate != null ? FontWeight.bold : FontWeight.normal,
-                          color: _expenseSelectedDate != null ? AppConstants.accentGreen : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => _navigateExpenseDate(-1),
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(9)),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+                        child: Icon(Icons.chevron_left, size: 18, color: AppConstants.accentGreen),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _pickExpenseDate(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_month, size: 15, color: AppConstants.accentGreen),
+                            const SizedBox(width: 3),
+                            Text(
+                              _getExpenseDateDisplay(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: _expenseSelectedDate != null ? FontWeight.bold : FontWeight.w600,
+                                color: _expenseSelectedDate != null ? AppConstants.accentGreen : Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      if (_expenseSelectedDate != null) ...[
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: _clearExpenseDateFilter,
-                          child: const Icon(Icons.close, size: 14, color: AppConstants.alertRed),
+                    ),
+                    InkWell(
+                      onTap: () => _navigateExpenseDate(1),
+                      borderRadius: BorderRadius.horizontal(
+                        right: _expenseSelectedDate == null ? const Radius.circular(9) : Radius.zero,
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+                        child: Icon(Icons.chevron_right, size: 18, color: AppConstants.accentGreen),
+                      ),
+                    ),
+                    if (_expenseSelectedDate != null) ...[
+                      InkWell(
+                        onTap: _clearExpenseDateFilter,
+                        borderRadius: const BorderRadius.horizontal(right: Radius.circular(9)),
+                        child: const Padding(
+                              padding: EdgeInsets.only(right: 6, left: 2, top: 7, bottom: 7),
+                          child: Icon(Icons.close, size: 14, color: AppConstants.alertRed),
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ],

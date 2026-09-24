@@ -472,88 +472,77 @@
       return isoDateStr;
     }
 
-    function openDateFilterModal(type) {
+    function getTodayIso() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getYesterdayIso() {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function getNavDateDisplay(type) {
       const isSales = type === 'sales';
-      const currentDate = isSales ? salesDateFilter : expenseDateFilter;
-      const today = new Date().toISOString().slice(0, 10);
-      
-      const d1 = new Date(); d1.setDate(d1.getDate() - 1);
-      const yesterday = d1.toISOString().slice(0, 10);
-      
-      const d2 = new Date(); d2.setDate(d2.getDate() - 2);
-      const dayBefore = d2.toISOString().slice(0, 10);
+      const filterMode = isSales ? salesFilterMode : expenseFilterMode;
+      const dateVal = isSales ? salesDateFilter : expenseDateFilter;
+      const today = getTodayIso();
+      const yesterday = getYesterdayIso();
 
-      showModal(`
-        <div class="space-y-3">
-          <div class="flex items-center justify-between pb-2 border-b border-[#2d4a2d]">
-            <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
-              <span>🗓️</span> <span>Filtrer par date (${isSales ? 'Ventes' : 'Achats'})</span>
-            </h3>
-            <button onclick="closeModal()" class="text-slate-400 hover:text-white text-sm font-bold px-1.5 py-0.5">✕</button>
-          </div>
-
-          <div>
-            <label class="text-xs text-[#888] block mb-1.5 font-medium">Sélectionnez la date :</label>
-            <input id="picker-modal-date" type="date" value="${currentDate || today}" class="w-full bg-[#0f1a0f] border-2 border-[#7bc67e] rounded-xl p-3 text-white text-base font-bold text-center tracking-wider focus:outline-none focus:border-emerald-400">
-          </div>
-
-          <!-- Raccourcis rapides -->
-          <div>
-            <label class="text-[10px] text-[#666] block mb-1">Raccourcis rapides :</label>
-            <div class="grid grid-cols-3 gap-1.5 text-xs">
-              <button type="button" onclick="document.getElementById('picker-modal-date').value = '${today}'" class="py-2 bg-[#0f1a0f] border border-[#2d4a2d] hover:border-[#7bc67e] text-slate-300 rounded-xl text-center font-medium">
-                Aujourd'hui
-              </button>
-              <button type="button" onclick="document.getElementById('picker-modal-date').value = '${yesterday}'" class="py-2 bg-[#0f1a0f] border border-[#2d4a2d] hover:border-[#7bc67e] text-slate-300 rounded-xl text-center font-medium">
-                Hier
-              </button>
-              <button type="button" onclick="document.getElementById('picker-modal-date').value = '${dayBefore}'" class="py-2 bg-[#0f1a0f] border border-[#2d4a2d] hover:border-[#7bc67e] text-slate-300 rounded-xl text-center font-medium">
-                Avant-hier
-              </button>
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="pt-2 flex gap-2">
-            ${currentDate ? `
-              <button onclick="clearDateFromModal('${type}')" class="py-2.5 px-3 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#5a2a2a] rounded-xl text-xs font-bold transition-all">
-                ✕ Effacer
-              </button>
-            ` : ''}
-            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] hover:bg-[#3d5a3d] text-white rounded-xl text-xs font-bold transition-all">
-              Annuler
-            </button>
-            <button onclick="applyDateFromModal('${type}')" class="flex-1 py-2.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition-all">
-              ✓ Appliquer
-            </button>
-          </div>
-        </div>
-      `);
+      if (filterMode === 'today' || dateVal === today) {
+        return 'Aujourd\'hui';
+      }
+      if (dateVal === yesterday) {
+        return 'Hier';
+      }
+      if (dateVal) {
+        const parts = dateVal.split('-');
+        if (parts.length === 3) {
+          return `${parts[2]}/${parts[1]}`;
+        }
+        return dateVal;
+      }
+      return 'Date';
     }
 
-    function applyDateFromModal(type) {
-      const input = document.getElementById('picker-modal-date');
-      if (!input) return closeModal();
-      const val = input.value;
-      if (!val) return closeModal();
+    function navigateDate(type, offset) {
+      const isSales = type === 'sales';
+      const curIso = isSales ? salesDateFilter : expenseDateFilter;
+      const filterMode = isSales ? salesFilterMode : expenseFilterMode;
 
-      if (type === 'sales') {
-        onSalesDateChange(val);
+      let baseDate;
+      if (curIso) {
+        const [y, m, d] = curIso.split('-').map(Number);
+        baseDate = new Date(y, m - 1, d);
+      } else if (filterMode === 'today') {
+        baseDate = new Date();
       } else {
-        onExpenseDateChange(val);
+        baseDate = new Date();
       }
-      closeModal();
-      showToast('Filtre appliqué : ' + formatDisplayDate(val));
-    }
 
-    function clearDateFromModal(type) {
-      if (type === 'sales') {
-        clearSalesDateFilter();
+      baseDate.setDate(baseDate.getDate() + offset);
+
+      const y = baseDate.getFullYear();
+      const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+      const d = String(baseDate.getDate()).padStart(2, '0');
+      const newIso = `${y}-${m}-${d}`;
+
+      if (isSales) {
+        salesDateFilter = newIso;
+        salesFilterMode = 'date';
+        renderSalesView();
       } else {
-        clearExpenseDateFilter();
+        expenseDateFilter = newIso;
+        expenseFilterMode = 'date';
+        renderStockView();
       }
-      closeModal();
-      showToast('Filtre date effacé');
     }
 
     function resetDemoData() {
@@ -904,14 +893,31 @@
             </button>
           </div>
 
-          <!-- Bouton Calendrier compact -->
-          <div class="flex items-center flex-shrink-0">
-            <button onclick="openDateFilterModal('sales')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all flex items-center gap-1 ${salesFilterMode === 'date' && salesDateFilter ? 'bg-[#2d5a2d] text-white border border-[#7bc67e]' : 'bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] hover:text-white'}">
-              <span>🗓️</span>
-              <span>${salesDateFilter ? formatDisplayDate(salesDateFilter) : 'Date'}</span>
+          <!-- Sélecteur de date ergonomique jour par jour -->
+          <div class="flex items-center bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-0.5 flex-shrink-0">
+            <button onclick="navigateDate('sales', -1)" title="Jour précédent" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-[#2d4a2d] active:scale-95 rounded-lg text-xs font-bold transition-all">
+              ◀
             </button>
-            ${salesDateFilter ? `
-              <button onclick="clearSalesDateFilter()" class="ml-1 text-xs text-red-400 hover:text-red-300 font-bold px-1" title="Effacer date">✕</button>
+            <div class="relative flex items-center justify-center px-2 py-1 rounded-lg hover:bg-[#2d4a2d] transition-all cursor-pointer" onclick="this.querySelector('input')?.showPicker?.()">
+              <span class="text-xs font-bold flex items-center gap-1 pointer-events-none ${(salesFilterMode === 'date' || salesFilterMode === 'today') ? 'text-[#7bc67e]' : 'text-slate-200'}">
+                <span>🗓️</span>
+                <span>${getNavDateDisplay('sales')}</span>
+              </span>
+              <input 
+                type="date" 
+                value="${salesDateFilter || getTodayIso()}" 
+                onchange="onSalesDateChange(this.value)" 
+                class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                title="Choisir une date au calendrier"
+              />
+            </div>
+            <button onclick="navigateDate('sales', 1)" title="Jour suivant" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-[#2d4a2d] active:scale-95 rounded-lg text-xs font-bold transition-all">
+              ▶
+            </button>
+            ${(salesFilterMode === 'date' || salesDateFilter) ? `
+              <button onclick="clearSalesDateFilter()" title="Réinitialiser (5 Dernières)" class="px-1.5 py-1 text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg text-xs font-bold transition-all ml-0.5">
+                ✕
+              </button>
             ` : ''}
           </div>
         </div>
@@ -2108,14 +2114,31 @@
             </button>
           </div>
 
-          <!-- Bouton Calendrier compact -->
-          <div class="flex items-center flex-shrink-0">
-            <button onclick="openDateFilterModal('expenses')" class="px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all flex items-center gap-1 ${expenseFilterMode === 'date' && expenseDateFilter ? 'bg-[#2d5a2d] text-white border border-[#7bc67e]' : 'bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] hover:text-white'}">
-              <span>🗓️</span>
-              <span>${expenseDateFilter ? formatDisplayDate(expenseDateFilter) : 'Date'}</span>
+          <!-- Sélecteur de date ergonomique jour par jour -->
+          <div class="flex items-center bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-0.5 flex-shrink-0">
+            <button onclick="navigateDate('expenses', -1)" title="Jour précédent" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-[#2d4a2d] active:scale-95 rounded-lg text-xs font-bold transition-all">
+              ◀
             </button>
-            ${expenseDateFilter ? `
-              <button onclick="clearExpenseDateFilter()" class="ml-1 text-xs text-red-400 hover:text-red-300 font-bold px-1" title="Effacer date">✕</button>
+            <div class="relative flex items-center justify-center px-2 py-1 rounded-lg hover:bg-[#2d4a2d] transition-all cursor-pointer" onclick="this.querySelector('input')?.showPicker?.()">
+              <span class="text-xs font-bold flex items-center gap-1 pointer-events-none ${(expenseFilterMode === 'date' || expenseFilterMode === 'today') ? 'text-[#7bc67e]' : 'text-slate-200'}">
+                <span>🗓️</span>
+                <span>${getNavDateDisplay('expenses')}</span>
+              </span>
+              <input 
+                type="date" 
+                value="${expenseDateFilter || getTodayIso()}" 
+                onchange="onExpenseDateChange(this.value)" 
+                class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                title="Choisir une date au calendrier"
+              />
+            </div>
+            <button onclick="navigateDate('expenses', 1)" title="Jour suivant" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-[#2d4a2d] active:scale-95 rounded-lg text-xs font-bold transition-all">
+              ▶
+            </button>
+            ${(expenseFilterMode === 'date' || expenseDateFilter) ? `
+              <button onclick="clearExpenseDateFilter()" title="Réinitialiser (5 Derniers)" class="px-1.5 py-1 text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg text-xs font-bold transition-all ml-0.5">
+                ✕
+              </button>
             ` : ''}
           </div>
         </div>

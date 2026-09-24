@@ -69,6 +69,35 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     }
   }
 
+  void _navigateDate(int offsetDays) {
+    final base = _selectedDate ?? (_filterMode == SalesFilterMode.today ? DateTime.now() : DateTime.now());
+    final newDate = base.add(Duration(days: offsetDays));
+    setState(() {
+      _selectedDate = newDate;
+      _filterMode = SalesFilterMode.date;
+    });
+  }
+
+  String _getDateDisplay() {
+    if (_selectedDate == null) {
+      if (_filterMode == SalesFilterMode.today) return 'Aujourd\'hui';
+      return 'Date';
+    }
+    final now = DateTime.now();
+    if (_selectedDate!.year == now.year &&
+        _selectedDate!.month == now.month &&
+        _selectedDate!.day == now.day) {
+      return 'Aujourd\'hui';
+    }
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (_selectedDate!.year == yesterday.year &&
+        _selectedDate!.month == yesterday.month &&
+        _selectedDate!.day == yesterday.day) {
+      return 'Hier';
+    }
+    return '${_selectedDate!.day}/${_selectedDate!.month}';
+  }
+
   void _clearDateFilter() {
     setState(() {
       _selectedDate = null;
@@ -204,47 +233,72 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // Bouton Calendrier compact
-                  InkWell(
-                    onTap: () => _pickDate(context),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
+                  // Sélecteur de date ergonomique jour par jour (◀ Date ▶ ✕)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _selectedDate != null
+                          ? AppConstants.primaryGreen.withOpacity(0.12)
+                          : Colors.grey.shade100,
+                      border: Border.all(
                         color: _selectedDate != null
-                            ? AppConstants.primaryGreen.withOpacity(0.15)
-                            : Colors.grey.shade100,
-                        border: Border.all(
-                          color: _selectedDate != null
-                              ? AppConstants.primaryGreen
-                              : Colors.grey.shade300,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
+                            ? AppConstants.primaryGreen
+                            : Colors.grey.shade300,
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.calendar_month, size: 16, color: AppConstants.primaryGreen),
-                          const SizedBox(width: 4),
-                          Text(
-                            _selectedDate != null
-                                ? '${_selectedDate!.day}/${_selectedDate!.month}'
-                                : 'Date',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: _selectedDate != null ? FontWeight.bold : FontWeight.normal,
-                              color: _selectedDate != null ? AppConstants.primaryGreen : Colors.black87,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkWell(
+                          onTap: () => _navigateDate(-1),
+                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(9)),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+                            child: Icon(Icons.chevron_left, size: 18, color: AppConstants.primaryGreen),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _pickDate(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.calendar_month, size: 15, color: AppConstants.primaryGreen),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _getDateDisplay(),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: _selectedDate != null ? FontWeight.bold : FontWeight.w600,
+                                    color: _selectedDate != null ? AppConstants.primaryGreen : Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          if (_selectedDate != null) ...[
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: _clearDateFilter,
-                              child: const Icon(Icons.close, size: 14, color: Colors.red),
+                        ),
+                        InkWell(
+                          onTap: () => _navigateDate(1),
+                          borderRadius: BorderRadius.horizontal(
+                            right: _selectedDate == null ? const Radius.circular(9) : Radius.zero,
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+                            child: Icon(Icons.chevron_right, size: 18, color: AppConstants.primaryGreen),
+                          ),
+                        ),
+                        if (_selectedDate != null) ...[
+                          InkWell(
+                            onTap: _clearDateFilter,
+                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(9)),
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 6, left: 2, top: 7, bottom: 7),
+                              child: Icon(Icons.close, size: 14, color: Colors.red),
                             ),
-                          ],
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ],
