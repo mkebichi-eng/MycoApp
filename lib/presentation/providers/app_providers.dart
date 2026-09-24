@@ -5,6 +5,7 @@ import '../../data/models/batch_model.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/deliverer_model.dart';
 import '../../data/models/delivery_model.dart';
+import '../../data/models/expense_model.dart';
 import '../../data/models/inventory_item_model.dart';
 import '../../data/models/inventory_movement_model.dart';
 import '../../data/models/sale_model.dart';
@@ -98,6 +99,17 @@ final inventoryMovementsStreamProvider =
     StreamProvider<List<InventoryMovementModel>>((ref) {
   final repo = ref.watch(inventoryRepositoryProvider);
   return repo.getMovementsStream();
+});
+
+final expensesStreamProvider = StreamProvider<List<ExpenseModel>>((ref) {
+  final repo = ref.watch(inventoryRepositoryProvider);
+  return repo.getExpensesStream();
+});
+
+final totalExpensesProvider = Provider<double>((ref) {
+  final expenses = ref.watch(expensesStreamProvider).value ?? 
+      ref.watch(inventoryRepositoryProvider).getLocalExpenses();
+  return expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
 });
 
 // Alertes de stock bas

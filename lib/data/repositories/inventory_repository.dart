@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/utils/myco_calculations.dart';
+import '../models/expense_model.dart';
 import '../models/inventory_item_model.dart';
 import '../models/inventory_movement_model.dart';
 
@@ -8,8 +9,10 @@ class InventoryRepository {
   final FirebaseFirestore? _firestore;
   final List<InventoryItemModel> _localItems = [];
   final List<InventoryMovementModel> _localMovements = [];
+  final List<ExpenseModel> _localExpenses = [];
   final _itemsController = StreamController<List<InventoryItemModel>>.broadcast();
   final _movementsController = StreamController<List<InventoryMovementModel>>.broadcast();
+  final _expensesController = StreamController<List<ExpenseModel>>.broadcast();
 
   InventoryRepository({FirebaseFirestore? firestore}) : _firestore = firestore {
     _seedInitialData();
@@ -84,10 +87,51 @@ class InventoryRepository {
         performedBy: 'Karim Responsable',
         timestamp: now.subtract(const Duration(days: 20)),
       ),
-    );
+    _localExpenses.addAll([
+      ExpenseModel(
+        id: 'exp_01',
+        label: 'Achat paille de blé hachée',
+        amount: 4500.0,
+        category: 'Matière première (Paille/Blanc)',
+        quantity: 300.0,
+        unit: 'kg',
+        unitPrice: 15.0,
+        isStockable: true,
+        stockItemId: 'item_straw',
+        supplier: 'Ferme Blida',
+        date: now.subtract(const Duration(days: 9)),
+      ),
+      ExpenseModel(
+        id: 'exp_02',
+        label: 'Alcool à 70° & désinfectant',
+        amount: 2625.0,
+        category: 'Sanitation & Hygiène',
+        quantity: 5.0,
+        unit: 'Litres',
+        unitPrice: 525.0,
+        isStockable: true,
+        stockItemId: 'item_alcohol',
+        supplier: 'Pharmacie Pro',
+        date: now.subtract(const Duration(days: 6)),
+      ),
+      ExpenseModel(
+        id: 'exp_03',
+        label: 'Carburant livraison Alger Centre',
+        amount: 1200.0,
+        category: 'Transport & Carburant',
+        quantity: 1.0,
+        unit: 'forfait',
+        unitPrice: 1200.0,
+        isStockable: false,
+        stockItemId: null,
+        supplier: 'Naftal',
+        date: now.subtract(const Duration(days: 3)),
+      ),
+    ]);
 
     _itemsController.add(List.unmodifiable(_localItems));
     _movementsController.add(List.unmodifiable(_localMovements));
+    _expensesController.add(List.unmodifiable(_localExpenses));
   }
 
   Stream<List<InventoryItemModel>> getItemsStream() {
@@ -204,4 +248,61 @@ class InventoryRepository {
     _localItems.removeWhere((i) => i.id == id);
     _itemsController.add(List.unmodifiable(_localItems));
   }
+
+  Stream<List<ExpenseModel>> getExpensesStream() {
+    return _expensesController.stream;
+  }
+
+  List<ExpenseModel> getLocalExpenses() => List.unmodifiable(_localExpenses);
+
+  Future<void> addExpense(ExpenseModel expense) async {
+    _localExpenses.insert(0, expense);
+    _expensesController.add(List.unmodifiable(_localExpenses));
+
+    // Si lié à un article en stock, mettre à jour le stock automatiquement
+    if (expense.isStockable && expense.stockItemId != null && expense.quantity > 0) {
+      final itemIndex = _localItems.indexWhere((i) => i.id == expense.stockItemId);
+      if (itemIndex != -1) {
+        await recordMovement(
+          itemId: expense.stockItemId!,
+          type: MovementType.stockIn,
+          quantity: expense.quantity,
+          reason: 'Achat d\'approvisionnement : ${expense.label}',
+          performedBy: 'Responsable Approvisionnement',
+        );
+
+        if (expense.unitPrice > 0) {
+          final item = _localItems[itemIndex];
+          _localItems[itemIndex] = item.copyWith(
+            unitCost: expense.unitPrice,
+            updatedAt: DateTime.now(),
+          );
+          _itemsController.add(List.unmodifiable(_localItems));
+        }
+      }
+    }
+  }
+
+  Future<void> deleteExpense(String id, {bool revertStock = false}) async {
+    final expIndex = _localExpenses.indexWhere((e) => e.id == id);
+    if (expIndex == -1) return;
+
+    final exp = _localExpenses[expIndex];
+    if (revertStock && exp.isStockable && exp.stockItemId != null && exp.quantity > 0) {
+      final itemIndex = _localItems.indexWhere((i) => i.id == exp.stockItemId);
+      if (itemIndex != -1) {
+        await recordMovement(
+          itemId: exp.stockItemId!,
+          type: MovementType.stockOut,
+          quantity: exp.quantity,
+          reason: 'Annulation achat / Dépense supprimée : ${exp.label}',
+          performedBy: 'Responsable',
+        );
+      }
+    }
+
+    _localExpenses.removeAt(expIndex);
+    _expensesController.add(List.unmodifiable(_localExpenses));
+  }
 }
+

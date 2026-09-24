@@ -30,8 +30,7 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
     final clientsWithDue = clients.where((c) => c.totalDue > 0).toList();
 
     final totalRev = financial['totalRevenue'] as double? ?? 35950.0;
-    final totalFee = financial['totalDeliveryFees'] as double? ?? 1350.0;
-    final totalExp = 7125.0; // Achats intrants et paille
+    final totalExp = ref.watch(totalExpensesProvider);
     final netProfit = totalRev - totalFee - totalExp;
     final totalDue = clientsWithDue.isNotEmpty
         ? clientsWithDue.fold<double>(0.0, (sum, c) => sum + c.totalDue)
@@ -304,7 +303,7 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
                 ),
               ),
               _buildModuleTile(
-                title: 'Stocks & Intrants',
+                title: 'Stocks & Achats',
                 subtitle: '${alerts.length} alerte(s)',
                 emoji: '📦',
                 onTap: () => Navigator.of(context).push(

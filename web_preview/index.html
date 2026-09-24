@@ -85,7 +85,7 @@
       <!-- Content rendered by Javascript -->
     </main>
 
-    <!-- Bottom Navigation Bar (6 modules) -->
+    <!-- Bottom Navigation Bar (5 modules ergonomiques) -->
     <nav id="bottom-nav" class="bg-[#1a2a1a] border-t border-[#2d4a2d] px-1 py-1.5 flex justify-around text-center select-none pb-4 sm:pb-1.5">
       <button onclick="switchTab('dashboard')" id="nav-dash" class="flex flex-col items-center text-[#7bc67e] font-bold p-1">
         <span class="text-lg">🏠</span>
@@ -100,18 +100,14 @@
         <span class="text-lg">📖</span>
         <span class="text-[9px] mt-0.5">Carnet Pro</span>
       </button>
-      <button onclick="switchTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
-        <span class="text-lg">📦</span>
-        <span class="text-[9px] mt-0.5">Stock</span>
-        <span id="stock-alert-dot" class="hidden absolute top-1 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-      </button>
       <button onclick="switchTab('bags')" id="nav-bags" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
         <span class="text-lg">🍄</span>
-        <span class="text-[9px] mt-0.5">Lots/Sacs</span>
+        <span class="text-[9px] mt-0.5">Lots & Sacs</span>
       </button>
-      <button onclick="switchTab('expenses')" id="nav-exp" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
-        <span class="text-lg">💸</span>
-        <span class="text-[9px] mt-0.5">Dépenses</span>
+      <button onclick="switchTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
+        <span class="text-lg">📦</span>
+        <span class="text-[9px] mt-0.5">Stocks & Achats</span>
+        <span id="stock-alert-dot" class="hidden absolute top-1 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
       </button>
     </nav>
   </div>
@@ -342,19 +338,88 @@
         { id: 'BAG-2026-004', batchId: 'LOT-2026-09-01', status: 'contaminated', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0 },
         { id: 'BAG-2026-005', batchId: 'LOT-2026-09-01', status: 'incubation', weight: 5.0, strain: 'Pleurote Gris HK35', harvestedKg: 0.0 }
       ],
+      units: ['kg', 'unités', 'L', 'g', 'bottes', 'rouleaux', 'sacs', 'cartons'],
+      expenseCategories: [
+        'Matière première (Paille/Blanc)',
+        'Sanitation & Hygiène',
+        'Consommables & Sacs',
+        'Énergie (Sonelgaz/Eau)',
+        'Transport & Carburant',
+        'Outillage & Équipement',
+        'Autre charge'
+      ],
       expenses: [
-        { id: 'exp_01', label: "Achat paille de blé (300 kg)", amount: 4500, category: "Matière première", date: "15 Sep" },
-        { id: 'exp_02', label: "Alcool 70° & désinfectant chaux", amount: 2625, category: "Sanitation", date: "18 Sep" },
-        { id: 'exp_03', label: "Carburant livraison Alger Centre", amount: 1200, category: "Transport", date: "21 Sep" }
+        {
+          id: 'exp_01',
+          label: "Achat paille de blé hachée",
+          amount: 4500,
+          category: "Matière première (Paille/Blanc)",
+          date: "15 Sep",
+          dateIso: "2026-09-15",
+          qty: 300,
+          unit: "kg",
+          unitPrice: 15,
+          isStockable: true,
+          stockItemId: 'stk_01',
+          supplier: "Ferme Blida"
+        },
+        {
+          id: 'exp_02',
+          label: "Alcool à 70° & désinfectant",
+          amount: 2625,
+          category: "Sanitation & Hygiène",
+          date: "18 Sep",
+          dateIso: "2026-09-18",
+          qty: 5,
+          unit: "L",
+          unitPrice: 525,
+          isStockable: true,
+          stockItemId: 'stk_04',
+          supplier: "Pharmacie Pro"
+        },
+        {
+          id: 'exp_03',
+          label: "Carburant livraison Alger Centre",
+          amount: 1200,
+          category: "Transport & Carburant",
+          date: "21 Sep",
+          dateIso: "2026-09-21",
+          qty: 1,
+          unit: "forfait",
+          unitPrice: 1200,
+          isStockable: false,
+          stockItemId: null,
+          supplier: "Naftal"
+        }
       ]
     };
 
-    let state = JSON.parse(localStorage.getItem('mycotrack_state_v5') || 'null') || initialSeedState;
+    let storedState = JSON.parse(localStorage.getItem('mycotrack_state_v6') || 'null');
+    if (!storedState) {
+      const v5State = JSON.parse(localStorage.getItem('mycotrack_state_v5') || 'null');
+      if (v5State) {
+        storedState = {
+          ...initialSeedState,
+          ...v5State,
+          units: v5State.units || initialSeedState.units,
+          expenseCategories: v5State.expenseCategories || initialSeedState.expenseCategories,
+          expenses: (v5State.expenses && v5State.expenses.length > 0) ? v5State.expenses : initialSeedState.expenses
+        };
+      }
+    }
+    let state = storedState || initialSeedState;
 
     function saveState() {
-      localStorage.setItem('mycotrack_state_v5', JSON.stringify(state));
+      localStorage.setItem('mycotrack_state_v6', JSON.stringify(state));
       checkBadges();
       renderCurrentView();
+    }
+
+    // Gestion de l'onglet fusionné Stocks & Achats (Stocks vs Dépenses)
+    let stockSubTab = 'stocks'; // 'stocks' | 'expenses'
+    function setStockSubTab(sub) {
+      stockSubTab = sub;
+      renderStockView();
     }
 
     // Gestion de l'onglet Carnet Pro (Clients vs Livreurs)
@@ -487,20 +552,23 @@
       } else if (tab === 'deliverers') {
         tab = 'carnet';
         carnetSubTab = 'deliverers';
+      } else if (tab === 'expenses') {
+        tab = 'stock';
+        stockSubTab = 'expenses';
       }
       if (subTab) {
-        carnetSubTab = subTab;
+        if (tab === 'carnet') carnetSubTab = subTab;
+        if (tab === 'stock') stockSubTab = subTab;
       }
       currentTab = tab;
-      ['dash', 'sales', 'carnet', 'stock', 'bags', 'exp'].forEach(t => {
+      ['dash', 'sales', 'carnet', 'stock', 'bags'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (el) {
           if ((tab === 'dashboard' && t === 'dash') || 
               (tab === 'sales' && t === 'sales') || 
               (tab === 'carnet' && t === 'carnet') || 
               (tab === 'stock' && t === 'stock') || 
-              (tab === 'bags' && t === 'bags') || 
-              (tab === 'expenses' && t === 'exp')) {
+              (tab === 'bags' && t === 'bags')) {
             el.className = "flex flex-col items-center text-[#7bc67e] font-bold p-1";
           } else {
             el.className = "flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1";
@@ -517,9 +585,8 @@
         if (currentTab === 'dashboard') renderDashboardView();
         else if (currentTab === 'sales') renderSalesView();
         else if (currentTab === 'carnet' || currentTab === 'clients') renderCarnetView();
-        else if (currentTab === 'stock') renderStockView();
+        else if (currentTab === 'stock' || currentTab === 'expenses') renderStockView();
         else if (currentTab === 'bags') renderBagsView();
-        else if (currentTab === 'expenses') renderExpensesView();
       }
     }
 
@@ -578,10 +645,13 @@
           </div>
 
           <!-- Dépenses exploitation -->
-          <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d]">
-            <p class="text-[11px] text-[#888]">Dépenses exploitation</p>
+          <div onclick="switchTab('stock', 'expenses')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#e07a7a] transition-all">
+            <p class="text-[11px] text-[#888] flex justify-between">
+              <span>Dépenses exploitation</span>
+              <span class="text-[9px] text-[#e07a7a] font-bold">Détails ➔</span>
+            </p>
             <p class="text-base font-bold text-[#e07a7a] mt-0.5">-${totalExpenses.toLocaleString()} DA</p>
-            <p class="text-[9px] text-[#666] mt-0.5">Substrats, gaz, sacs...</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${state.expenses.length} achats & charges</p>
           </div>
 
           <!-- Bénéfice net réel -->
@@ -652,7 +722,7 @@
                   <p class="font-bold">🔴 Stock critique : ${s.name}</p>
                   <p class="text-[10px] text-[#aaa]">Reste <strong>${s.quantity} ${s.unit}</strong> (seuil alerte : ${s.threshold} ${s.unit})</p>
                 </div>
-                <button onclick="switchTab('stock')" class="px-2 py-0.5 bg-[#4a9e4e] text-white rounded text-[10px] font-bold">
+                <button onclick="switchTab('stock', 'stocks')" class="px-2 py-0.5 bg-[#4a9e4e] text-white rounded text-[10px] font-bold">
                   Stock
                 </button>
               </div>
@@ -675,8 +745,8 @@
           </div>
           <div onclick="switchTab('stock')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">📦</span>
-            <h3 class="text-xs font-bold text-white mt-1">Stocks & Intrants</h3>
-            <p class="text-[10px] text-[#888]">${state.stocks.length} articles suivis</p>
+            <h3 class="text-xs font-bold text-white mt-1">Stocks & Achats</h3>
+            <p class="text-[10px] text-[#888]">${state.stocks.length} articles • ${state.expenses.length} dépenses</p>
           </div>
           <div onclick="switchTab('bags')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">🍄</span>
@@ -1772,45 +1842,122 @@
     }
 
     // ==========================================
-    // 6. GESTION DU STOCK
+    // 6. GESTION FUSIONNÉE : STOCKS & ACHATS
     // ==========================================
+    let expenseFilterMode = 'all'; // 'all' | 'stock' | 'operational'
+    function setExpenseFilterMode(mode) {
+      expenseFilterMode = mode;
+      renderStockView();
+    }
+
     function renderStockView() {
       const container = document.getElementById('app-content');
+      
+      const totalStockItems = state.stocks.length;
+      const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
+      const estimatedStockVal = state.stocks.reduce((sum, s) => sum + ((s.quantity || 0) * (s.cost || 0)), 0);
+      const totalExpenses = state.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
       container.innerHTML = `
-        <div class="flex justify-between items-center mb-1">
+        <!-- Entête Titre & Bouton d'action contextuel -->
+        <div class="flex justify-between items-center mb-1.5">
           <div>
-            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Stocks & Intrants</h2>
-            <p class="text-[10px] text-[#888]">${state.stocks.length} articles suivis</p>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase flex items-center gap-1.5">
+              <span>📦</span> <span>STOCKS & ACHATS</span>
+            </h2>
+            <p class="text-[10px] text-[#888]">${totalStockItems} articles suivis • ${totalExpenses.toLocaleString()} DA engagés</p>
           </div>
-          <button onclick="openNewStockModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
-            <span>+</span> <span>Nouvel Article</span>
+          <div class="flex items-center gap-1.5">
+            ${stockSubTab === 'stocks' ? `
+              <button onclick="openNewStockModal()" class="text-[10px] bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/40 px-2.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1">
+                <span>+</span> <span>Nouvel Article</span>
+              </button>
+              <button onclick="openNewExpenseModal()" class="text-[10px] bg-[#4a9e4e] text-white px-2.5 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+                <span>🛒</span> <span>Acheter / Dépense</span>
+              </button>
+            ` : `
+              <button onclick="openNewExpenseModal()" class="text-[10px] bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+                <span>+</span> <span>Nouvelle Dépense</span>
+              </button>
+            `}
+          </div>
+        </div>
+
+        <!-- Commutateur d'onglets ergonomique (2 vues unifiées) -->
+        <div class="flex bg-[#142214] p-1 rounded-2xl border border-[#2d4a2d] mb-2.5 select-none">
+          <button onclick="setStockSubTab('stocks')" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            stockSubTab === 'stocks' ? 'bg-[#2d5a2d] text-white shadow' : 'text-slate-400 hover:text-white'
+          }">
+            <span>📦</span>
+            <span>État des Stocks (${totalStockItems})</span>
+            ${lowCount > 0 ? `<span class="px-1.5 py-0.2 bg-red-600 text-white text-[9px] rounded-full font-bold">${lowCount}</span>` : ''}
+          </button>
+          <button onclick="setStockSubTab('expenses')" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            stockSubTab === 'expenses' ? 'bg-[#2d5a2d] text-white shadow' : 'text-slate-400 hover:text-white'
+          }">
+            <span>💸</span>
+            <span>Dépenses & Achats (${state.expenses.length})</span>
           </button>
         </div>
 
-        <div class="space-y-2 mt-2">
-          ${state.stocks.map(s => {
+        ${stockSubTab === 'stocks' ? renderStocksSubViewHtml(estimatedStockVal, lowCount) : renderExpensesSubViewHtml(totalExpenses)}
+      `;
+    }
+
+    function renderStocksSubViewHtml(estimatedVal, lowCount) {
+      return `
+        <!-- KPI Résumé Stock -->
+        <div class="grid grid-cols-2 gap-2 mb-2.5">
+          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
+            <p class="text-[10px] text-[#888]">Valeur estimée du stock</p>
+            <p class="text-sm font-bold text-[#7bc67e] mt-0.5">${estimatedVal.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Calculé au coût d'achat</p>
+          </div>
+          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border ${lowCount > 0 ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'}">
+            <p class="text-[10px] ${lowCount > 0 ? 'text-[#e07a7a]' : 'text-[#888]'}">Articles sous le seuil</p>
+            <p class="text-sm font-bold ${lowCount > 0 ? 'text-red-400' : 'text-white'} mt-0.5">${lowCount} critique(s)</p>
+            <p class="text-[9px] text-[#666] mt-0.5">${lowCount > 0 ? 'Réapprovisionnement requis' : 'Tous stocks suffisants'}</p>
+          </div>
+        </div>
+
+        <!-- Liste des Articles en Stock -->
+        <div class="space-y-2">
+          ${state.stocks.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-6 rounded-2xl border border-[#2d4a2d] text-center text-[#888] text-xs">
+              Aucun article en stock. Cliquez sur <strong>+ Nouvel Article</strong> pour commencer.
+            </div>
+          ` : state.stocks.map(s => {
             const isLow = s.quantity <= s.threshold;
             return `
               <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isLow ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
                 <div class="flex justify-between items-start">
                   <div>
-                    <h3 class="font-bold text-white text-xs flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                       <span>${isLow ? '🔴' : '🟢'}</span>
-                      <span>${s.name}</span>
-                    </h3>
-                    <p class="text-[10px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-[#888]'} mt-0.5">
-                      Stock : <strong>${s.quantity} ${s.unit}</strong> • Seuil alerte : ${s.threshold} ${s.unit}
+                      <h3 class="font-bold text-white text-xs">${s.name}</h3>
+                      <span class="text-[9px] text-[#888] bg-[#0f1a0f] border border-[#2d4a2d] px-1.5 py-0.5 rounded font-medium">${s.category || 'Intrant'}</span>
+                    </div>
+                    <p class="text-[11px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-slate-300'} mt-1">
+                      Stock actuel : <strong class="text-sm text-white">${s.quantity} ${s.unit}</strong>
+                      <span class="text-[#888] text-[10px] ml-1">(Seuil critique : ${s.threshold} ${s.unit})</span>
+                    </p>
+                    <p class="text-[10px] text-[#888] mt-0.5">
+                      Coût d'achat moyen : <strong class="text-[#7bc67e] font-mono">${s.cost || 0} DA / ${s.unit}</strong>
                     </p>
                   </div>
-                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1">🗑️</button>
+                  <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer">🗑️</button>
                 </div>
 
-                <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/50">
-                  <button onclick="openStockMvtModal('${s.id}', 'in')" class="flex-1 py-1.5 bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold">
-                    + Entrée (Réappro)
+                <!-- Actions directes : Entrée, Sortie, et Réapprovisionnement/Achat -->
+                <div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-[#2d4a2d]/50">
+                  <button onclick="openStockMvtModal('${s.id}', 'in')" class="py-1.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-[11px] font-bold">
+                    + Entrée
                   </button>
-                  <button onclick="openStockMvtModal('${s.id}', 'out')" class="flex-1 py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold">
-                    - Sortie (Usage)
+                  <button onclick="openStockMvtModal('${s.id}', 'out')" class="py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-[11px] font-bold">
+                    - Sortie
+                  </button>
+                  <button onclick="openNewExpenseModal('${s.id}')" class="py-1.5 bg-[#3a301a] hover:bg-[#4a3e20] text-[#e0b87a] border border-[#e0b87a]/40 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1" title="Acheter et mettre à jour le stock">
+                    <span>🛒</span> <span>Acheter</span>
                   </button>
                 </div>
               </div>
@@ -1820,31 +1967,137 @@
       `;
     }
 
+    function renderExpensesSubViewHtml(totalExpenses) {
+      const stockPurchasesTotal = state.expenses.filter(e => e.isStockable).reduce((s, e) => s + e.amount, 0);
+      const operationalTotal = totalExpenses - stockPurchasesTotal;
+
+      let filtered = [...state.expenses];
+      if (expenseFilterMode === 'stock') {
+        filtered = filtered.filter(e => e.isStockable);
+      } else if (expenseFilterMode === 'operational') {
+        filtered = filtered.filter(e => !e.isStockable);
+      }
+
+      return `
+        <!-- KPI Résumé Dépenses -->
+        <div class="grid grid-cols-2 gap-2 mb-2.5">
+          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
+            <p class="text-[10px] text-[#888]">Achats de matières & stock</p>
+            <p class="text-sm font-bold text-[#7bc67e] mt-0.5">${stockPurchasesTotal.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Paille, blanc, sacs...</p>
+          </div>
+          <div class="bg-[#1a2a1a] p-2.5 rounded-xl border border-[#2d4a2d]">
+            <p class="text-[10px] text-[#888]">Charges & Exploitation</p>
+            <p class="text-sm font-bold text-[#e07a7a] mt-0.5">${operationalTotal.toLocaleString()} DA</p>
+            <p class="text-[9px] text-[#666] mt-0.5">Sonelgaz, carburant...</p>
+          </div>
+        </div>
+
+        <!-- Filtres rapides -->
+        <div class="flex gap-1.5 mb-2.5 overflow-x-auto pb-1 text-[11px]">
+          <button onclick="setExpenseFilterMode('all')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'all' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
+            Toutes (${state.expenses.length})
+          </button>
+          <button onclick="setExpenseFilterMode('stock')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'stock' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
+            📦 Achats Stock (${state.expenses.filter(e => e.isStockable).length})
+          </button>
+          <button onclick="setExpenseFilterMode('operational')" class="px-2.5 py-1 rounded-lg font-bold transition-all ${expenseFilterMode === 'operational' ? 'bg-[#2d5a2d] text-white shadow' : 'bg-[#142214] text-slate-400 hover:text-white border border-[#2d4a2d]'}">
+            ⚡ Charges Directes (${state.expenses.filter(e => !e.isStockable).length})
+          </button>
+        </div>
+
+        <!-- Liste des Dépenses & Achats -->
+        <div class="space-y-2">
+          ${filtered.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-6 rounded-2xl border border-[#2d4a2d] text-center text-[#888] text-xs">
+              Aucune dépense trouvée pour ce filtre.
+            </div>
+          ` : filtered.map(e => {
+            const isStockLinked = e.isStockable && e.stockItemId;
+            return `
+              <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-1.5 text-xs">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="font-bold text-white text-xs">${e.label}</span>
+                      ${isStockLinked ? `
+                        <span class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                          <span>📦</span> <span>+${e.qty || 1} ${e.unit || 'u'} au stock</span>
+                        </span>
+                      ` : `
+                        <span class="text-[9px] bg-amber-950 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                          <span>⚡</span> <span>Charge exploitation</span>
+                        </span>
+                      `}
+                    </div>
+                    <p class="text-[10px] text-[#888] mt-0.5">
+                      <span>📅 ${e.date || ''}</span>
+                      ${e.category ? ` • <span>📂 ${e.category}</span>` : ''}
+                      ${e.supplier ? ` • <span class="text-slate-300">🏪 ${e.supplier}</span>` : ''}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[#e07a7a] font-bold text-sm">-${e.amount.toLocaleString()} DA</span>
+                    <button onclick="deleteExpense('${e.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Supprimer">🗑️</button>
+                  </div>
+                </div>
+
+                ${e.qty && e.unitPrice ? `
+                  <div class="bg-[#0f1a0f] px-2.5 py-1.5 rounded-xl border border-[#2d4a2d]/60 flex justify-between text-[11px] text-[#aaa]">
+                    <span>Détail : <strong class="text-white">${e.qty} ${e.unit || ''}</strong> × <strong class="text-white">${e.unitPrice} DA / ${e.unit || ''}</strong></span>
+                    <span class="text-[#7bc67e] font-semibold">${e.amount.toLocaleString()} DA</span>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
     function openNewStockModal() {
+      const unitsOptions = (state.units || ['kg', 'unités', 'L', 'g']).map(u => `<option value="${u}">${u}</option>`).join('');
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2">Ajouter un Article au Stock</h3>
-        <div class="space-y-2 text-xs">
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>📦</span> <span>Ajouter un Article au Stock</span>
+        </h3>
+        <div class="space-y-2.5 text-xs">
           <div>
-            <label class="text-[#888] block mb-1">Désignation</label>
-            <input id="stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chaux éteinte">
+            <label class="text-[#888] block mb-1">Désignation de l'article</label>
+            <input id="stk-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Chaux éteinte pour pasteurisation">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Catégorie</label>
+            <select id="stk-category" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
+              <option value="Matière première">Matière première (Paille/Blanc)</option>
+              <option value="Consommable">Consommable (Sacs, attaches)</option>
+              <option value="Sanitation">Sanitation & Désinfection</option>
+              <option value="Autre">Autre</option>
+            </select>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="text-[#888] block mb-1">Quantité initiale</label>
-              <input id="stk-qty" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="25">
+              <label class="text-[#888] block mb-1">Quantité initiale en stock</label>
+              <input id="stk-qty" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="25">
             </div>
             <div>
               <label class="text-[#888] block mb-1">Unité</label>
-              <select id="stk-unit" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
-                <option value="kg">kg</option>
-                <option value="unités">unités / sacs</option>
-                <option value="L">L (Litres)</option>
+              <select id="stk-unit" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="onNewStockUnitChange(this.value)">
+                ${unitsOptions}
+                <option value="__NEW_UNIT__">+ Ajouter une unité...</option>
               </select>
+              <input id="stk-custom-unit" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs mt-1.5 hidden" placeholder="Nouvelle unité (ex: paquet)">
             </div>
           </div>
-          <div>
-            <label class="text-[#888] block mb-1">Seuil d'alerte critique</label>
-            <input id="stk-threshold" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Seuil d'alerte critique</label>
+              <input id="stk-threshold" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="5">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Coût d'achat (DA / unité)</label>
+              <input id="stk-cost" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="400">
+            </div>
           </div>
           <div class="pt-3 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
@@ -1854,17 +2107,40 @@
       `);
     }
 
+    function onNewStockUnitChange(val) {
+      const customInput = document.getElementById('stk-custom-unit');
+      if (customInput) {
+        if (val === '__NEW_UNIT__') {
+          customInput.classList.remove('hidden');
+          customInput.focus();
+        } else {
+          customInput.classList.add('hidden');
+        }
+      }
+    }
+
     function saveNewStockItem() {
       const name = document.getElementById('stk-name').value.trim();
+      const category = document.getElementById('stk-category').value;
       const qty = parseFloat(document.getElementById('stk-qty').value) || 0;
-      const unit = document.getElementById('stk-unit').value;
+      let unit = document.getElementById('stk-unit').value;
+      if (unit === '__NEW_UNIT__') {
+        const customUnit = (document.getElementById('stk-custom-unit').value || '').trim();
+        if (customUnit) {
+          unit = customUnit;
+          if (!state.units.includes(unit)) state.units.push(unit);
+        } else {
+          unit = 'unités';
+        }
+      }
       const threshold = parseFloat(document.getElementById('stk-threshold').value) || 5;
+      const cost = parseFloat(document.getElementById('stk-cost').value) || 0;
 
       if (!name) return alert('Désignation requise.');
-      state.stocks.push({ id: 'stk_' + Date.now(), name, quantity: qty, unit, threshold, cost: 400 });
+      state.stocks.push({ id: 'stk_' + Date.now(), name, category, quantity: qty, unit, threshold, cost });
       saveState();
       closeModal();
-      showToast('Article ajouté !');
+      showToast('Article ajouté au stock !');
     }
 
     function openStockMvtModal(id, type) {
@@ -2068,90 +2344,387 @@
     }
 
     // ==========================================
-    // 8. DÉPENSES EXPLOITATION
+    // 8. DÉPENSES EXPLOITATION & ACHATS STOCKS
     // ==========================================
     function renderExpensesView() {
-      const container = document.getElementById('app-content');
-      const totalExp = state.expenses.reduce((s, e) => s + e.amount, 0);
-
-      container.innerHTML = `
-        <div class="flex justify-between items-center mb-1">
-          <div>
-            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Dépenses Exploitation</h2>
-            <p class="text-[10px] text-[#888]">Total engagé : <strong>${totalExp.toLocaleString()} DA</strong></p>
-          </div>
-          <button onclick="openNewExpenseModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
-            <span>+</span> <span>Nouvelle Dépense</span>
-          </button>
-        </div>
-
-        <div class="space-y-2 mt-2">
-          ${state.expenses.map(e => `
-            <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] flex justify-between items-center text-xs">
-              <div>
-                <p class="font-bold text-white">${e.label}</p>
-                <p class="text-[10px] text-[#888]">${e.date} • ${e.category}</p>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[#e07a7a] font-bold text-sm">-${e.amount.toLocaleString()} DA</span>
-                <button onclick="deleteExpense('${e.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs">🗑️</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
+      stockSubTab = 'expenses';
+      renderStockView();
     }
 
-    function openNewExpenseModal() {
+    function openNewExpenseModal(preselectedStockId = null) {
+      const isStockPreset = !!preselectedStockId;
+      const presetStock = isStockPreset ? state.stocks.find(s => s.id === preselectedStockId) : null;
+
+      const stocksOptions = state.stocks.map(s => `
+        <option value="${s.id}" ${s.id === preselectedStockId ? 'selected' : ''}>
+          📦 ${s.name} (Actuel: ${s.quantity} ${s.unit})
+        </option>
+      `).join('');
+
+      const unitsOptions = (state.units || ['kg', 'unités', 'L', 'g']).map(u => `
+        <option value="${u}" ${presetStock && presetStock.unit === u ? 'selected' : ''}>${u}</option>
+      `).join('');
+
+      const catOptions = (state.expenseCategories || [
+        'Matière première (Paille/Blanc)',
+        'Sanitation & Hygiène',
+        'Consommables & Sacs',
+        'Énergie (Sonelgaz/Eau)',
+        'Transport & Carburant',
+        'Outillage & Équipement',
+        'Autre charge'
+      ]).map(c => `
+        <option value="${c}" ${presetStock && presetStock.category === c ? 'selected' : ''}>${c}</option>
+      `).join('');
+
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2">Ajouter une Dépense</h3>
-        <div class="space-y-2 text-xs">
-          <div>
-            <label class="text-[#888] block mb-1">Motif / Justification</label>
-            <input id="exp-label" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Facture électricité chambre">
-          </div>
-          <div>
-            <label class="text-[#888] block mb-1">Montant en Dinars (DA)</label>
-            <input id="exp-amount" type="number" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" placeholder="2500">
-          </div>
-          <div>
-            <label class="text-[#888] block mb-1">Catégorie</label>
-            <select id="exp-cat" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
-              <option value="Matière première">Matière première (Paille/Mycélium)</option>
-              <option value="Sanitation">Désinfection & Alcool</option>
-              <option value="Énergie">Électricité / Eau</option>
-              <option value="Transport">Carburant</option>
-              <option value="Consommables">Sacs micro-perforés</option>
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+          <span class="flex items-center gap-1.5">
+            <span>💸</span> <span>Enregistrer une Dépense / Achat</span>
+          </span>
+          <span class="text-[10px] text-[#7bc67e] font-mono">DZD (DA)</span>
+        </h3>
+
+        <div class="space-y-2.5 text-xs max-h-[75vh] overflow-y-auto pr-1">
+          <!-- 1. Liaison avec un article du Stock -->
+          <div class="bg-[#142214] p-2.5 rounded-xl border border-[#2d4a2d]">
+            <label class="text-[#7bc67e] font-bold block mb-1 flex items-center justify-between">
+              <span>📦 Article en Stock concerné :</span>
+              <span class="text-[9px] text-[#aaa] font-normal">Optionnel pour frais</span>
+            </label>
+            <select id="exp-stock-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white text-xs font-semibold" onchange="onExpenseStockChange(this.value)">
+              <option value="">-- Dépense générale (Frais / Énergie / Transport sans impact stock) --</option>
+              <optgroup label="Articles existants en stock :">
+                ${stocksOptions}
+              </optgroup>
+              <option value="__NEW_STOCK__">✨ + Créer un nouvel article dans le stock...</option>
             </select>
+
+            <!-- Champ nouveau stock si sélectionné -->
+            <div id="exp-new-stock-box" class="hidden mt-2 pt-2 border-t border-[#2d4a2d]/60 space-y-1.5">
+              <label class="text-[10px] text-[#aaa] block">Nom du nouvel article à ajouter au catalogue :</label>
+              <input id="exp-new-stock-name" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs" placeholder="ex: Blanc Pleurote Jaune">
+            </div>
+
+            <!-- Aperçu de l'impact stock en direct -->
+            <div id="exp-stock-preview" class="${presetStock ? '' : 'hidden'} mt-2 p-2 bg-[#1f3a1f] border border-[#7bc67e]/40 rounded-xl text-[10px] text-[#7bc67e] flex items-center justify-between">
+              <span id="exp-preview-text">
+                ${presetStock ? `Stock actuel : ${presetStock.quantity} ${presetStock.unit} ➔ Deviendra : ${presetStock.quantity + 1} ${presetStock.unit}` : ''}
+              </span>
+              <span>🟢 Auto-sync</span>
+            </div>
           </div>
-          <div class="pt-3 flex gap-2">
+
+          <!-- 2. Motif / Désignation -->
+          <div>
+            <label class="text-[#888] block mb-1">Motif / Désignation de la dépense</label>
+            <input id="exp-label" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-medium" 
+                   value="${presetStock ? 'Achat ' + presetStock.name : ''}" 
+                   placeholder="ex: Achat 300 kg paille de blé hachée">
+          </div>
+
+          <!-- 3. Catégorie (Non figée) -->
+          <div>
+            <label class="text-[#888] block mb-1">Catégorie comptable</label>
+            <select id="exp-cat" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white" onchange="onExpenseCatChange(this.value)">
+              ${catOptions}
+              <option value="__NEW_CAT__">+ Ajouter une nouvelle catégorie...</option>
+            </select>
+            <div id="new-cat-container" class="hidden mt-1.5">
+              <input id="exp-custom-cat" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs" placeholder="Nom de la nouvelle catégorie personnalisée...">
+            </div>
+          </div>
+
+          <!-- 4. Quantité & Unité (Non figée) -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Quantité achetée</label>
+              <input id="exp-qty" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-sm" value="1" oninput="onExpenseCalcChange('qty')">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Unité</label>
+              <select id="exp-unit" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="onExpenseUnitChange(this.value)">
+                ${unitsOptions}
+                <option value="__NEW_UNIT__">+ Ajouter une unité...</option>
+              </select>
+              <div id="new-unit-container" class="hidden mt-1.5">
+                <input id="exp-custom-unit" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs" placeholder="ex: paquet, palette, botte...">
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Calcul Prix Unitaire & Total (Calcul bidirectionnel interactif) -->
+          <div class="bg-[#142214] p-2.5 rounded-xl border border-[#2d4a2d] space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[#888] block mb-1">Prix par unité (DA)</label>
+                <input id="exp-unit-price" type="number" step="any" 
+                       class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold font-mono" 
+                       value="${presetStock ? (presetStock.cost || '') : ''}" 
+                       placeholder="ex: 15" 
+                       oninput="onExpenseCalcChange('unitPrice')">
+              </div>
+              <div>
+                <label class="text-[#7bc67e] font-bold block mb-1">Prix Total Payé (DA)</label>
+                <input id="exp-amount" type="number" step="any" 
+                       class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-[#7bc67e] font-bold text-sm font-mono" 
+                       value="${presetStock ? (presetStock.cost || '') : ''}" 
+                       placeholder="ex: 4500" 
+                       oninput="onExpenseCalcChange('total')">
+              </div>
+            </div>
+            <p class="text-[9px] text-[#888] leading-tight">
+              💡 <em>Saisissez Quantité × Prix unitaire OU tapez directement le Prix total : le calcul s'ajuste automatiquement dans les deux sens !</em>
+            </p>
+          </div>
+
+          <!-- 6. Fournisseur / Établissement (Optionnel) -->
+          <div>
+            <label class="text-[#888] block mb-1">Fournisseur / Lieu d'achat (Optionnel)</label>
+            <input id="exp-supplier" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white" placeholder="ex: Ferme agricole Boufarik, Naftal...">
+          </div>
+
+          <!-- 7. Option de mise à jour du Stock -->
+          <label class="flex items-center gap-2 cursor-pointer p-2 bg-[#0f1a0f] rounded-xl border border-[#2d4a2d]">
+            <input id="exp-auto-stock" type="checkbox" ${isStockPreset ? 'checked' : 'checked'} class="accent-[#4a9e4e] w-4 h-4">
+            <span class="text-[11px] text-slate-200">
+              Mettre à jour le stock automatiquement (+quantité au stock et actualise le prix unitaire)
+            </span>
+          </label>
+
+          <!-- Boutons de validation -->
+          <div class="pt-2 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="saveNewExpense()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow">Enregistrer</button>
+            <button onclick="saveNewExpense()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600 transition-all flex items-center justify-center gap-1">
+              <span>💾</span> <span>Enregistrer Dépense</span>
+            </button>
           </div>
         </div>
       `);
     }
 
+    function onExpenseStockChange(val) {
+      const newStockBox = document.getElementById('exp-new-stock-box');
+      const preview = document.getElementById('exp-stock-preview');
+      const autoStockCheck = document.getElementById('exp-auto-stock');
+      const labelInput = document.getElementById('exp-label');
+      const unitSelect = document.getElementById('exp-unit');
+      const unitPriceInput = document.getElementById('exp-unit-price');
+
+      if (val === '__NEW_STOCK__') {
+        newStockBox.classList.remove('hidden');
+        preview.classList.add('hidden');
+        autoStockCheck.checked = true;
+      } else if (val) {
+        newStockBox.classList.add('hidden');
+        preview.classList.remove('hidden');
+        autoStockCheck.checked = true;
+
+        const s = state.stocks.find(x => x.id === val);
+        if (s) {
+          if (!labelInput.value || labelInput.value.startsWith('Achat ')) {
+            labelInput.value = 'Achat ' + s.name;
+          }
+          if (s.unit && unitSelect) {
+            unitSelect.value = s.unit;
+          }
+          if (s.cost && unitPriceInput) {
+            unitPriceInput.value = s.cost;
+          }
+          onExpenseCalcChange('unitPrice');
+        }
+      } else {
+        newStockBox.classList.add('hidden');
+        preview.classList.add('hidden');
+        autoStockCheck.checked = false;
+      }
+    }
+
+    function onExpenseCatChange(val) {
+      const container = document.getElementById('new-cat-container');
+      const input = document.getElementById('exp-custom-cat');
+      if (val === '__NEW_CAT__') {
+        container.classList.remove('hidden');
+        if (input) input.focus();
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
+    function onExpenseUnitChange(val) {
+      const container = document.getElementById('new-unit-container');
+      const input = document.getElementById('exp-custom-unit');
+      if (val === '__NEW_UNIT__') {
+        container.classList.remove('hidden');
+        if (input) input.focus();
+      } else {
+        container.classList.add('hidden');
+      }
+      onExpenseCalcChange('unit');
+    }
+
+    function onExpenseCalcChange(source) {
+      const qtyEl = document.getElementById('exp-qty');
+      const upEl = document.getElementById('exp-unit-price');
+      const amountEl = document.getElementById('exp-amount');
+      const stockIdEl = document.getElementById('exp-stock-id');
+      const previewEl = document.getElementById('exp-stock-preview');
+      const previewTextEl = document.getElementById('exp-preview-text');
+      const unitEl = document.getElementById('exp-unit');
+
+      if (!qtyEl || !upEl || !amountEl) return;
+
+      const qty = parseFloat(qtyEl.value) || 0;
+      const unit = unitEl ? (unitEl.value === '__NEW_UNIT__' ? (document.getElementById('exp-custom-unit')?.value || 'u') : unitEl.value) : 'u';
+
+      if (source === 'qty' || source === 'unitPrice' || source === 'unit') {
+        const up = parseFloat(upEl.value) || 0;
+        if (qty > 0 && up > 0) {
+          amountEl.value = Math.round(qty * up);
+        }
+      } else if (source === 'total') {
+        const total = parseFloat(amountEl.value) || 0;
+        if (qty > 0 && total > 0) {
+          upEl.value = Math.round((total / qty) * 100) / 100;
+        }
+      }
+
+      // Mettre à jour l'aperçu dynamique du stock
+      if (stockIdEl && stockIdEl.value && stockIdEl.value !== '__NEW_STOCK__' && previewTextEl) {
+        const s = state.stocks.find(x => x.id === stockIdEl.value);
+        if (s) {
+          const newQty = Math.round((s.quantity + qty) * 100) / 100;
+          previewTextEl.innerText = `Stock actuel : ${s.quantity} ${s.unit} ➔ Deviendra : ${newQty} ${s.unit}`;
+          if (previewEl) previewEl.classList.remove('hidden');
+        }
+      }
+    }
+
     function saveNewExpense() {
-      const label = document.getElementById('exp-label').value.trim();
+      const stockIdVal = document.getElementById('exp-stock-id').value;
+      let label = document.getElementById('exp-label').value.trim();
       const amount = parseFloat(document.getElementById('exp-amount').value) || 0;
-      const category = document.getElementById('exp-cat').value;
-      if (!label || amount <= 0) return alert('Motif et montant requis.');
+      const qty = parseFloat(document.getElementById('exp-qty').value) || 1;
+      const unitPrice = parseFloat(document.getElementById('exp-unit-price').value) || (amount / qty);
+      const supplier = document.getElementById('exp-supplier').value.trim();
+      const autoStock = document.getElementById('exp-auto-stock').checked;
+
+      // 1. Résolution de la catégorie
+      let category = document.getElementById('exp-cat').value;
+      if (category === '__NEW_CAT__') {
+        const customCat = (document.getElementById('exp-custom-cat').value || '').trim();
+        if (customCat) {
+          category = customCat;
+          if (!state.expenseCategories.includes(category)) {
+            state.expenseCategories.push(category);
+          }
+        } else {
+          category = 'Autre charge';
+        }
+      }
+
+      // 2. Résolution de l'unité
+      let unit = document.getElementById('exp-unit').value;
+      if (unit === '__NEW_UNIT__') {
+        const customUnit = (document.getElementById('exp-custom-unit').value || '').trim();
+        if (customUnit) {
+          unit = customUnit;
+          if (!state.units.includes(unit)) {
+            state.units.push(unit);
+          }
+        } else {
+          unit = 'unités';
+        }
+      }
+
+      if (!label && stockIdVal && stockIdVal !== '__NEW_STOCK__') {
+        const s = state.stocks.find(x => x.id === stockIdVal);
+        if (s) label = 'Achat ' + s.name;
+      }
+      if (!label) return alert('Veuillez saisir un libellé / motif pour la dépense.');
+      if (amount <= 0) return alert('Le montant total doit être supérieur à 0 DA.');
+
+      // 3. Mise à jour ou création du Stock si lié
+      let linkedStockId = null;
+      let isStockable = false;
+      let stockMsg = '';
+
+      if (stockIdVal === '__NEW_STOCK__') {
+        const newStockName = (document.getElementById('exp-new-stock-name').value || '').trim() || label;
+        const newStockId = 'stk_' + Date.now();
+        state.stocks.push({
+          id: newStockId,
+          name: newStockName,
+          category: category.includes('Sanitation') ? 'Sanitation' : (category.includes('Consommable') ? 'Consommable' : 'Matière première'),
+          quantity: autoStock ? qty : 0,
+          unit: unit,
+          threshold: 5,
+          cost: unitPrice > 0 ? unitPrice : 100
+        });
+        linkedStockId = newStockId;
+        isStockable = true;
+        stockMsg = ` • Nouvel article "${newStockName}" créé dans le stock (${qty} ${unit})`;
+      } else if (stockIdVal) {
+        linkedStockId = stockIdVal;
+        isStockable = true;
+        const s = state.stocks.find(x => x.id === stockIdVal);
+        if (s && autoStock) {
+          const oldQty = s.quantity;
+          s.quantity = Math.round((s.quantity + qty) * 100) / 100;
+          if (unitPrice > 0) s.cost = unitPrice;
+          stockMsg = ` • Stock "${s.name}" actualisé : ${oldQty} ➔ ${s.quantity} ${s.unit}`;
+        }
+      }
+
+      // 4. Enregistrement de la dépense
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      const dateIso = today.toISOString().slice(0, 10);
 
       state.expenses.unshift({
-        id: 'exp_' + Date.now(), label, amount, category,
-        date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+        id: 'exp_' + Date.now(),
+        label,
+        amount,
+        category,
+        qty,
+        unit,
+        unitPrice: Math.round(unitPrice * 100) / 100,
+        supplier,
+        isStockable,
+        stockItemId: linkedStockId,
+        date: dateStr,
+        dateIso
       });
+
       saveState();
       closeModal();
-      showToast('Dépense ajoutée !');
+      showToast(`Dépense de ${amount.toLocaleString()} DA enregistrée !${stockMsg}`);
     }
 
     function deleteExpense(id) {
-      if (confirm('Supprimer cette dépense ?')) {
+      const exp = state.expenses.find(e => e.id === id);
+      if (!exp) return;
+
+      let extraWarning = '';
+      const linkedStock = (exp.isStockable && exp.stockItemId) ? state.stocks.find(s => s.id === exp.stockItemId) : null;
+      if (linkedStock) {
+        extraWarning = `\n\nCet achat avait augmenté le stock de "${linkedStock.name}" de +${exp.qty} ${exp.unit}.`;
+      }
+
+      if (confirm(`Supprimer la dépense "${exp.label}" (-${exp.amount.toLocaleString()} DA) ?${extraWarning}`)) {
+        if (linkedStock && exp.qty > 0) {
+          if (confirm(`Voulez-vous aussi déduire les ${exp.qty} ${exp.unit} qui avaient été ajoutés au stock de "${linkedStock.name}" ?`)) {
+            linkedStock.quantity = Math.max(0, Math.round((linkedStock.quantity - exp.qty) * 100) / 100);
+            showToast(`Dépense supprimée et ${exp.qty} ${exp.unit} retirés du stock.`);
+          } else {
+            showToast('Dépense supprimée (stock conservé).');
+          }
+        } else {
+          showToast('Dépense retirée.');
+        }
+
         state.expenses = state.expenses.filter(e => e.id !== id);
         saveState();
-        showToast('Dépense retirée.');
       }
     }
 
