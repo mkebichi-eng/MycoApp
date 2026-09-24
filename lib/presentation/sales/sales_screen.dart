@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../core/utils/myco_calculations.dart';
 import '../../data/models/client_model.dart';
+import '../../data/models/deliverer_model.dart';
 import '../../data/models/sale_model.dart';
 import '../providers/app_providers.dart';
 import '../shared/myco_button.dart';
@@ -492,12 +493,17 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 
   void _showNewSaleDialog(BuildContext context, WidgetRef ref) {
     final clients = ref.read(clientsStreamProvider).value ?? [];
+    final deliverers = ref.read(deliverersStreamProvider).value ?? [];
     ClientModel? selectedClient = clients.isNotEmpty ? clients.first : null;
+    DelivererModel? selectedDeliverer = deliverers.isNotEmpty ? deliverers.first : null;
+
     final qtyCtrl = TextEditingController(text: '5.0');
     final priceCtrl = TextEditingController(
       text: selectedClient != null ? selectedClient.presetPricePerKg.toString() : '1200.0',
     );
-    final deliveryFeeCtrl = TextEditingController(text: '350.0');
+    final deliveryFeeCtrl = TextEditingController(
+      text: selectedDeliverer != null ? selectedDeliverer.defaultFee.toString() : '350.0',
+    );
     final costCtrl = TextEditingController(text: '1250.0'); // ~250 DA/kg coût intrants estimé
 
     showDialog(
@@ -534,6 +540,25 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           }
                         },
                       ),
+                    if (deliverers.isNotEmpty)
+                      DropdownButtonFormField<DelivererModel>(
+                        value: selectedDeliverer,
+                        decoration: const InputDecoration(labelText: 'Livreur assigné'),
+                        items: deliverers.map((d) {
+                          return DropdownMenuItem(
+                            value: d,
+                            child: Text('${d.name} (${d.vehicle})'),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setStateDialog(() {
+                              selectedDeliverer = val;
+                              deliveryFeeCtrl.text = val.defaultFee.toString();
+                            });
+                          }
+                        },
+                      ),
                     TextField(
                       controller: qtyCtrl,
                       keyboardType: TextInputType.number,
@@ -549,7 +574,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                     TextField(
                       controller: deliveryFeeCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tarif Livreur assigné (DA)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tarif course livreur (DA) *',
+                        helperText: 'Modifiable librement pour cette commande',
+                      ),
                       onChanged: (_) => setStateDialog(() {}),
                     ),
                     TextField(

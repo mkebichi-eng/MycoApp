@@ -3,6 +3,7 @@ import '../../core/constants/app_constants.dart';
 import '../../data/models/bag_model.dart';
 import '../../data/models/batch_model.dart';
 import '../../data/models/client_model.dart';
+import '../../data/models/deliverer_model.dart';
 import '../../data/models/delivery_model.dart';
 import '../../data/models/inventory_item_model.dart';
 import '../../data/models/inventory_movement_model.dart';
@@ -10,6 +11,7 @@ import '../../data/models/sale_model.dart';
 import '../../data/models/user_profile_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/clients_repository.dart';
+import '../../data/repositories/deliverers_repository.dart';
 import '../../data/repositories/deliveries_repository.dart';
 import '../../data/repositories/inventory_repository.dart';
 import '../../data/repositories/production_repository.dart';
@@ -26,6 +28,10 @@ final productionRepositoryProvider = Provider<ProductionRepository>((ref) {
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
   return ClientsRepository();
+});
+
+final deliverersRepositoryProvider = Provider<DeliverersRepository>((ref) {
+  return DeliverersRepository();
 });
 
 final deliveriesRepositoryProvider = Provider<DeliveriesRepository>((ref) {
@@ -59,6 +65,11 @@ final bagsStreamProvider = StreamProvider<List<BagModel>>((ref) {
 final clientsStreamProvider = StreamProvider<List<ClientModel>>((ref) {
   final repo = ref.watch(clientsRepositoryProvider);
   return repo.getClientsStream();
+});
+
+final deliverersStreamProvider = StreamProvider<List<DelivererModel>>((ref) {
+  final repo = ref.watch(deliverersRepositoryProvider);
+  return repo.getDeliverersStream();
 });
 
 final allDeliveriesStreamProvider = StreamProvider<List<DeliveryModel>>((ref) {

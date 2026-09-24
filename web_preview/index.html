@@ -96,9 +96,9 @@
         <span class="text-[9px] mt-0.5">Ventes</span>
         <span id="active-sales-badge" class="hidden absolute top-0.5 right-1 px-1 bg-amber-500 text-black text-[8px] font-bold rounded-full">1</span>
       </button>
-      <button onclick="switchTab('clients')" id="nav-clients" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
-        <span class="text-lg">👤</span>
-        <span class="text-[9px] mt-0.5">Clients</span>
+      <button onclick="switchTab('carnet')" id="nav-carnet" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1">
+        <span class="text-lg">📖</span>
+        <span class="text-[9px] mt-0.5">Carnet Pro</span>
       </button>
       <button onclick="switchTab('stock')" id="nav-stock" class="flex flex-col items-center text-slate-400 hover:text-[#7bc67e] p-1 relative">
         <span class="text-lg">📦</span>
@@ -132,14 +132,12 @@
     let currentRole = 'admin';
     let currentTab = 'dashboard';
 
-    // Livreurs disponibles avec leurs tarifs de course
-    const deliverersList = [
-      { id: 'deliv_karim', name: 'Karim Meziani (Moto rapide)', phone: '+213551001122', fee: 350 },
-      { id: 'deliv_yacine', name: 'Yacine Dahmani (Kangoo / Gros volume)', phone: '+213662223344', fee: 500 },
-      { id: 'deliv_amine', name: 'Amine Benali (Scooter urbain)', phone: '+213773334455', fee: 300 }
-    ];
-
     const initialSeedState = {
+      deliverers: [
+        { id: 'deliv_karim', name: 'Karim Meziani', phone: '+213551001122', vehicle: 'Moto rapide', address: '14 Rue Didouche Mourad, Alger', fee: 350, status: 'active' },
+        { id: 'deliv_yacine', name: 'Yacine Dahmani', phone: '+213662223344', vehicle: 'Kangoo (Gros volume)', address: 'Centre Commercial El Qods, Chéraga', fee: 500, status: 'active' },
+        { id: 'deliv_amine', name: 'Amine Benali', phone: '+213773334455', vehicle: 'Scooter urbain', address: 'Coopérative El Feth, Kouba', fee: 300, status: 'active' }
+      ],
       clients: [
         { id: 'cli_01', name: "Restaurant Le Cèdre Bleu", contact: "Chef Youssef", phone: "+213550112233", address: "14 Rue Didouche Mourad", city: "Alger", price: 1200, due: 0, type: "Restaurant" },
         { id: 'cli_02', name: "Pizzeria Bella Vista", contact: "Sofiane", phone: "+213661445566", address: "8 Boulevard Colonel Amirouche", city: "Alger", price: 1100, due: 5500, type: "Pizzeria" },
@@ -351,12 +349,19 @@
       ]
     };
 
-    let state = JSON.parse(localStorage.getItem('mycotrack_state_v4') || 'null') || initialSeedState;
+    let state = JSON.parse(localStorage.getItem('mycotrack_state_v5') || 'null') || initialSeedState;
 
     function saveState() {
-      localStorage.setItem('mycotrack_state_v4', JSON.stringify(state));
+      localStorage.setItem('mycotrack_state_v5', JSON.stringify(state));
       checkBadges();
       renderCurrentView();
+    }
+
+    // Gestion de l'onglet Carnet Pro (Clients vs Livreurs)
+    let carnetSubTab = 'clients'; // 'clients' | 'deliverers'
+    function setCarnetSubTab(sub) {
+      carnetSubTab = sub;
+      renderCarnetView();
     }
 
     // Gestion du filtrage des ventes (5 récentes par défaut, recherche par date, impayés, tout)
@@ -475,14 +480,24 @@
       }
     }
 
-    function switchTab(tab) {
+    function switchTab(tab, subTab = null) {
+      if (tab === 'clients') {
+        tab = 'carnet';
+        carnetSubTab = 'clients';
+      } else if (tab === 'deliverers') {
+        tab = 'carnet';
+        carnetSubTab = 'deliverers';
+      }
+      if (subTab) {
+        carnetSubTab = subTab;
+      }
       currentTab = tab;
-      ['dash', 'sales', 'clients', 'stock', 'bags', 'exp'].forEach(t => {
+      ['dash', 'sales', 'carnet', 'stock', 'bags', 'exp'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (el) {
           if ((tab === 'dashboard' && t === 'dash') || 
               (tab === 'sales' && t === 'sales') || 
-              (tab === 'clients' && t === 'clients') || 
+              (tab === 'carnet' && t === 'carnet') || 
               (tab === 'stock' && t === 'stock') || 
               (tab === 'bags' && t === 'bags') || 
               (tab === 'expenses' && t === 'exp')) {
@@ -501,7 +516,7 @@
       } else {
         if (currentTab === 'dashboard') renderDashboardView();
         else if (currentTab === 'sales') renderSalesView();
-        else if (currentTab === 'clients') renderClientsView();
+        else if (currentTab === 'carnet' || currentTab === 'clients') renderCarnetView();
         else if (currentTab === 'stock') renderStockView();
         else if (currentTab === 'bags') renderBagsView();
         else if (currentTab === 'expenses') renderExpensesView();
@@ -653,10 +668,10 @@
             <h3 class="text-xs font-bold text-white mt-1">Ventes & Courses</h3>
             <p class="text-[10px] text-[#888]">${state.deliveries.length} commandes totales</p>
           </div>
-          <div onclick="switchTab('clients')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
-            <span class="text-xl">👤</span>
-            <h3 class="text-xs font-bold text-white mt-1">Clients & Tarifs</h3>
-            <p class="text-[10px] text-[#888]">${state.clients.length} clients réguliers</p>
+          <div onclick="switchTab('carnet')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
+            <span class="text-xl">📖</span>
+            <h3 class="text-xs font-bold text-white mt-1">Carnet Pro</h3>
+            <p class="text-[10px] text-[#888]">${state.clients.length} clients & ${(state.deliverers || []).length} livreurs</p>
           </div>
           <div onclick="switchTab('stock')" class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e] transition-all">
             <span class="text-xl">📦</span>
@@ -931,16 +946,22 @@
             <input id="vte-qty" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-3 text-white text-lg font-bold" value="5.0" oninput="recalculateSaleForm()">
           </div>
 
-          <!-- 3. Livreur assigné -->
-          <div>
-            <label class="text-[#888] block mb-1">Livreur assigné *</label>
-            <select id="vte-deliverer-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="recalculateSaleForm()">
-              ${deliverersList.map(deliv => `
-                <option value="${deliv.id}">
-                  ${deliv.name} — (Course : ${deliv.fee} DA)
-                </option>
-              `).join('')}
-            </select>
+          <!-- 3. Livreur assigné & Prix de la course (Modifiable) -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Livreur assigné *</label>
+              <select id="vte-deliverer-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" onchange="onSaleDelivererChanged()">
+                ${(state.deliverers || []).map(deliv => `
+                  <option value="${deliv.id}">
+                    ${deliv.name} (${deliv.vehicle || 'Livreur'})
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Course livreur (DA) *</label>
+              <input id="vte-course-fee" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" oninput="recalculateSaleForm()">
+            </div>
           </div>
 
           <!-- 4. Récapitulatif calculé en direct -->
@@ -956,6 +977,20 @@
           </div>
         </div>
       `);
+      
+      const firstDeliv = (state.deliverers || [])[0];
+      if (firstDeliv) {
+        document.getElementById('vte-course-fee').value = firstDeliv.fee;
+      }
+      recalculateSaleForm();
+    }
+
+    function onSaleDelivererChanged() {
+      const delivId = document.getElementById('vte-deliverer-id').value;
+      const deliverer = (state.deliverers || []).find(d => d.id === delivId);
+      if (deliverer) {
+        document.getElementById('vte-course-fee').value = deliverer.fee;
+      }
       recalculateSaleForm();
     }
 
@@ -964,12 +999,12 @@
       const client = state.clients.find(c => c.id === cliId);
       const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
       const delivId = document.getElementById('vte-deliverer-id').value;
-      const deliverer = deliverersList.find(d => d.id === delivId);
+      const deliverer = (state.deliverers || []).find(d => d.id === delivId);
+      const fee = parseFloat(document.getElementById('vte-course-fee').value) || (deliverer ? deliverer.fee : 0);
 
       if (!client || !deliverer) return;
 
       const totalFacture = Math.round(qty * client.price);
-      const fee = deliverer.fee;
       const netEstime = totalFacture - fee;
 
       document.getElementById('vte-calc-summary').innerHTML = `
@@ -983,7 +1018,7 @@
         </div>
         <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d] pt-1">
           <span>Frais course livreur :</span>
-          <span class="text-[#e0b87a] font-semibold">${fee} DA</span>
+          <span class="text-[#e0b87a] font-semibold">${fee} DA <span class="text-[10px] text-[#888]">(modifiable)</span></span>
         </div>
         <div class="flex justify-between text-xs pt-1 border-t border-[#7bc67e]/30">
           <span class="text-[#7bc67e]">Net caisse estimé (si payé 100%) :</span>
@@ -997,7 +1032,8 @@
       const client = state.clients.find(c => c.id === cliId);
       const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
       const delivId = document.getElementById('vte-deliverer-id').value;
-      const deliverer = deliverersList.find(d => d.id === delivId);
+      const deliverer = (state.deliverers || []).find(d => d.id === delivId);
+      const fee = parseFloat(document.getElementById('vte-course-fee').value) || (deliverer ? deliverer.fee : 350);
 
       if (!client || qty <= 0 || !deliverer) return alert('Veuillez saisir une quantité valide.');
 
@@ -1016,7 +1052,7 @@
         totalAmount: totalAmount,
         delivererId: deliverer.id,
         delivererName: deliverer.name,
-        deliveryFee: deliverer.fee,
+        deliveryFee: fee, // Tarif course modifiable pour cette vente
         status: 'pending_acceptance', // Actif pour le livreur !
         isClientPaid: false,
         amountCollected: 0,
@@ -1030,7 +1066,7 @@
       state.deliveries.unshift(newOrder);
       saveState();
       closeModal();
-      showToast(`Vente ${orderNum} créée ! Livreur ${deliverer.name} notifié.`);
+      showToast(`Vente ${orderNum} créée ! Livreur ${deliverer.name} notifié (Course : ${fee} DA).`);
     }
 
     // ==========================================
@@ -1299,69 +1335,318 @@
     }
 
     // ==========================================
-    // 5. GESTION DES CLIENTS
+    // 5. CARNET PRO : GESTION DES CLIENTS & LIVREURS
     // ==========================================
-    function renderClientsView() {
+    function getVehicleIcon(vehicleStr) {
+      if (!vehicleStr) return '🛵';
+      const v = vehicleStr.toLowerCase();
+      if (v.includes('kangoo') || v.includes('fourgon') || v.includes('utilitaire') || v.includes('voiture')) return '🚗';
+      if (v.includes('scooter')) return '🛴';
+      return '🛵';
+    }
+
+    function renderCarnetView() {
       const container = document.getElementById('app-content');
+      const deliverers = state.deliverers || [];
+
       container.innerHTML = `
         <div class="flex justify-between items-center mb-1">
           <div>
-            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase">Répertoire Clients</h2>
-            <p class="text-[10px] text-[#888]">${state.clients.length} clients avec tarifs personnalisés</p>
+            <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase flex items-center gap-1.5">
+              <span>📖</span> <span>Carnet Pro</span>
+            </h2>
+            <p class="text-[10px] text-[#888]">
+              ${carnetSubTab === 'clients' 
+                ? `${state.clients.length} clients avec tarifs personnalisés` 
+                : `${deliverers.length} livreurs actifs dans votre flotte`}
+            </p>
           </div>
-          <button onclick="openNewClientModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
-            <span>+</span> <span>Nouveau Client</span>
+          ${carnetSubTab === 'clients' ? `
+            <button onclick="openNewClientModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+              <span>+</span> <span>Nouveau Client</span>
+            </button>
+          ` : `
+            <button onclick="openNewDelivererModal()" class="text-xs bg-[#4a9e4e] text-white px-3 py-1.5 rounded-xl font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1">
+              <span>+</span> <span>Nouveau Livreur</span>
+            </button>
+          `}
+        </div>
+
+        <!-- Commutateur Segmenté (Clients vs Livreurs) -->
+        <div class="grid grid-cols-2 p-1 bg-[#0f1a0f] border border-[#2d4a2d] rounded-2xl text-xs font-bold my-2">
+          <button 
+            onclick="setCarnetSubTab('clients')" 
+            class="py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${carnetSubTab === 'clients' ? 'bg-[#1a2a1a] text-[#7bc67e] border border-[#2d4a2d] shadow' : 'text-[#888] hover:text-white'}"
+          >
+            <span>👥</span> <span>Clients (${state.clients.length})</span>
+          </button>
+          <button 
+            onclick="setCarnetSubTab('deliverers')" 
+            class="py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${carnetSubTab === 'deliverers' ? 'bg-[#1a2a1a] text-[#7bc67e] border border-[#2d4a2d] shadow' : 'text-[#888] hover:text-white'}"
+          >
+            <span>🛵</span> <span>Livreurs (${deliverers.length})</span>
           </button>
         </div>
 
-        <div class="space-y-2 mt-2">
-          ${state.clients.map(c => `
-            <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2">
-              <div class="flex justify-between items-start">
-                <div>
-                  <h3 class="font-bold text-white text-sm flex items-center gap-2">
-                    <span>${c.name}</span>
-                    <span class="text-[9px] bg-[#0f1a0f] text-[#7bc67e] border border-[#2d4a2d] px-1.5 py-0.2 rounded font-normal">${c.type || 'Client'}</span>
-                  </h3>
-                  ${c.contact ? `<p class="text-[11px] text-[#aaa]">Contact : ${c.contact}</p>` : ''}
+        <!-- =================== SOUS-ONGLET CLIENTS =================== -->
+        ${carnetSubTab === 'clients' ? `
+          <div class="space-y-2 mt-2">
+            ${state.clients.map(c => `
+              <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                      <span>${c.name}</span>
+                      <span class="text-[9px] bg-[#0f1a0f] text-[#7bc67e] border border-[#2d4a2d] px-1.5 py-0.2 rounded font-normal">${c.type || 'Client'}</span>
+                    </h3>
+                    ${c.contact ? `<p class="text-[11px] text-[#aaa]">Contact : ${c.contact}</p>` : ''}
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button onclick="openEditClientModal('${c.id}')" class="text-slate-400 hover:text-white p-1 text-xs" title="Modifier">✏️</button>
+                    <button onclick="deleteClient('${c.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Supprimer">🗑️</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-1">
-                  <button onclick="openEditClientModal('${c.id}')" class="text-slate-400 hover:text-white p-1 text-xs" title="Modifier">✏️</button>
-                  <button onclick="deleteClient('${c.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Supprimer">🗑️</button>
+
+                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] flex justify-between items-center text-xs">
+                  <div>
+                    <span class="text-[#888] text-[10px]">Tarif négocié</span>
+                    <p class="font-bold text-[#7bc67e] text-sm">${c.price.toLocaleString()} DA <span class="text-[10px] text-[#888]">/ kg</span></p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[#888] text-[10px]">Reste à payer (Dû)</span>
+                    <p class="font-bold text-xs ${c.due > 0 ? 'text-[#e07a7a]' : 'text-[#7bc67e]'}">
+                      ${c.due > 0 ? `🔴 Impayé : ${c.due.toLocaleString()} DA` : '✓ À jour'}
+                    </p>
+                  </div>
+                </div>
+
+                <p class="text-xs text-[#aaa] flex items-center gap-1.5">
+                  <span>📍</span> <span>${c.address}, ${c.city}</span>
+                </p>
+
+                <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
+                  <a href="tel:${c.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
+                    <span>📞</span> <span>${c.phone}</span>
+                  </a>
+                  <button onclick="openNewSaleModal('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
+                    <span>🛒</span> <span>Créer Vente</span>
+                  </button>
                 </div>
               </div>
+            `).join('')}
+          </div>
+        ` : `
+          <!-- =================== SOUS-ONGLET LIVREURS =================== -->
+          <div class="space-y-2.5 mt-2">
+            ${deliverers.length === 0 ? `
+              <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
+                <span class="text-3xl">🛵</span>
+                <p class="text-xs text-[#888] mt-2">Aucun livreur enregistré dans votre flotte.</p>
+                <button onclick="openNewDelivererModal()" class="mt-3 px-3 py-1.5 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Ajouter un Livreur</button>
+              </div>
+            ` : ''}
 
-              <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] flex justify-between items-center text-xs">
-                <div>
-                  <span class="text-[#888] text-[10px]">Tarif négocié</span>
-                  <p class="font-bold text-[#7bc67e] text-sm">${c.price.toLocaleString()} DA <span class="text-[10px] text-[#888]">/ kg</span></p>
-                </div>
-                <div class="text-right">
-                  <span class="text-[#888] text-[10px]">Reste à payer (Dû)</span>
-                  <p class="font-bold text-xs ${c.due > 0 ? 'text-[#e07a7a]' : 'text-[#7bc67e]'}">
-                    ${c.due > 0 ? `🔴 Impayé : ${c.due.toLocaleString()} DA` : '✓ À jour'}
+            ${deliverers.map(d => {
+              const activeDeliveries = state.deliveries.filter(x => x.delivererId === d.id && (x.status === 'in_delivery' || x.status === 'pending_acceptance')).length;
+              const totalSettled = state.deliveries.filter(x => x.delivererId === d.id && x.status === 'settled').length;
+
+              return `
+                <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2.5">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                        <span>${getVehicleIcon(d.vehicle)}</span>
+                        <span>${d.name}</span>
+                      </h3>
+                      <p class="text-[11px] text-[#aaa] mt-0.5">Véhicule : <strong class="text-white">${d.vehicle}</strong></p>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button onclick="openEditDelivererModal('${d.id}')" class="text-slate-400 hover:text-white p-1 text-xs" title="Modifier le tarif ou les infos">✏️</button>
+                      <button onclick="deleteDeliverer('${d.id}')" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Supprimer">🗑️</button>
+                    </div>
+                  </div>
+
+                  <!-- Détail financier du livreur -->
+                  <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] flex justify-between items-center text-xs">
+                    <div>
+                      <span class="text-[#888] text-[10px] block">Tarif de course de base</span>
+                      <p class="font-bold text-[#e0b87a] text-sm">${d.fee} DA <span class="text-[10px] text-[#888]">/ course</span></p>
+                      <span class="text-[9px] text-[#7bc67e] block">(Modifiable lors de chaque vente)</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[#888] text-[10px] block">Activité en direct</span>
+                      <p class="font-semibold text-xs ${activeDeliveries > 0 ? 'text-amber-400' : 'text-[#7bc67e]'}">
+                        ${activeDeliveries > 0 ? `🛵 ${activeDeliveries} course(s) en cours` : '✓ Disponible'}
+                      </p>
+                      <span class="text-[9px] text-[#888] block">${totalSettled} course(s) réalisée(s)</span>
+                    </div>
+                  </div>
+
+                  <!-- Zone / Adresse habituelle -->
+                  <p class="text-xs text-[#aaa] flex items-center gap-1.5">
+                    <span>📍</span> <span>Zone : ${d.address}</span>
                   </p>
+
+                  <!-- Actions rapides : Appel direct et modification -->
+                  <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
+                    <a href="tel:${d.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
+                      <span>📞</span> <span>Appeler (${d.phone})</span>
+                    </a>
+                    <button onclick="openEditDelivererModal('${d.id}')" class="px-3 py-1.5 bg-[#1a2a1a] text-slate-300 border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1 hover:text-white">
+                      <span>✏️</span> <span>Modifier Tarif</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <p class="text-xs text-[#aaa] flex items-center gap-1.5">
-                <span>📍</span> <span>${c.address}, ${c.city}</span>
-              </p>
-
-              <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
-                <a href="tel:${c.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
-                  <span>📞</span> <span>${c.phone}</span>
-                </a>
-                <button onclick="openNewSaleModal('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
-                  <span>🛒</span> <span>Créer Vente</span>
-                </button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
+              `;
+            }).join('')}
+          </div>
+        `}
       `;
     }
 
+    // Modal pour ajouter un livreur
+    function openNewDelivererModal() {
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>🛵</span> <span>Ajouter un Nouveau Livreur</span>
+        </h3>
+        <p class="text-[11px] text-[#888] mb-3">Enregistrez le livreur avec son tarif habituel de course. Ce tarif sera pré-rempli lors de chaque commande.</p>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Nom & Prénom du livreur *</label>
+            <input id="deliv-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Sofiane Belkacem">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Téléphone *</label>
+              <input id="deliv-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" value="+213">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Véhicule</label>
+              <select id="deliv-vehicle" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white">
+                <option value="Moto rapide">🛵 Moto rapide</option>
+                <option value="Scooter urbain">🛴 Scooter urbain</option>
+                <option value="Kangoo / Utilitaire">🚗 Kangoo / Utilitaire</option>
+                <option value="Voiture commerciale">🚙 Voiture commerciale</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Zone / Adresse de base *</label>
+            <input id="deliv-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="ex: Bab Ezzouar & Alger Est">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Tarif de course de base (DA) *</label>
+            <input id="deliv-fee" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-base" value="350">
+            <span class="text-[10px] text-[#888]">Ce montant sera modifiable manuellement pour chaque commande.</span>
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveNewDeliverer()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">Enregistrer</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveNewDeliverer() {
+      const name = document.getElementById('deliv-name').value.trim();
+      const phone = document.getElementById('deliv-phone').value.trim();
+      const vehicle = document.getElementById('deliv-vehicle').value;
+      const address = document.getElementById('deliv-address').value.trim();
+      const fee = parseFloat(document.getElementById('deliv-fee').value) || 350;
+
+      if (!name) return alert('Nom obligatoire.');
+      if (!phone || phone === '+213') return alert('Numéro de téléphone obligatoire.');
+
+      if (!state.deliverers) state.deliverers = [];
+
+      state.deliverers.unshift({
+        id: 'deliv_' + Date.now(),
+        name,
+        phone,
+        vehicle,
+        address: address || 'Alger',
+        fee,
+        status: 'active'
+      });
+
+      saveState();
+      closeModal();
+      showToast(`Livreur ${name} ajouté au Carnet Pro !`);
+    }
+
+    function openEditDelivererModal(id) {
+      const d = (state.deliverers || []).find(x => x.id === id);
+      if (!d) return;
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>✏️</span> <span>Modifier Livreur : ${d.name}</span>
+        </h3>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-[#888] block mb-1">Nom complet</label>
+            <input id="edit-deliv-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="${d.name}">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Téléphone</label>
+              <input id="edit-deliv-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" value="${d.phone}">
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Véhicule</label>
+              <input id="edit-deliv-vehicle" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${d.vehicle}">
+            </div>
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Zone / Adresse de base</label>
+            <input id="edit-deliv-address" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${d.address}">
+          </div>
+          <div>
+            <label class="text-[#888] block mb-1">Tarif de course de base (DA) *</label>
+            <input id="edit-deliv-fee" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-base text-[#e0b87a]" value="${d.fee}">
+          </div>
+          <div class="pt-3 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveEditDeliverer('${id}')" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold">Sauvegarder</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveEditDeliverer(id) {
+      const d = (state.deliverers || []).find(x => x.id === id);
+      if (!d) return;
+
+      d.name = document.getElementById('edit-deliv-name').value.trim() || d.name;
+      d.phone = document.getElementById('edit-deliv-phone').value.trim() || d.phone;
+      d.vehicle = document.getElementById('edit-deliv-vehicle').value.trim() || d.vehicle;
+      d.address = document.getElementById('edit-deliv-address').value.trim() || d.address;
+      d.fee = parseFloat(document.getElementById('edit-deliv-fee').value) || d.fee;
+
+      saveState();
+      closeModal();
+      showToast(`Fiche de ${d.name} mise à jour !`);
+    }
+
+    function deleteDeliverer(id) {
+      const d = (state.deliverers || []).find(x => x.id === id);
+      if (!d) return;
+
+      // Vérifier les livraisons en cours
+      const pendingDeliveries = state.deliveries.filter(x => x.delivererId === id && (x.status === 'in_delivery' || x.status === 'pending_acceptance'));
+      if (pendingDeliveries.length > 0) {
+        return alert(`Impossible de supprimer ${d.name} car il a ${pendingDeliveries.length} livraison(s) en cours. Terminez ou réassignez d'abord ces livraisons.`);
+      }
+
+      if (confirm(`Confirmer la suppression du livreur "${d.name}" du Carnet Pro ?`)) {
+        state.deliverers = state.deliverers.filter(x => x.id !== id);
+        saveState();
+        showToast(`Livreur ${d.name} supprimé.`);
+      }
+    }
+
+    // Modales et actions Clients (inchangées et optimisées)
     function openNewClientModal() {
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
@@ -1384,6 +1669,7 @@
                 <option value="Pizzeria">Pizzeria</option>
                 <option value="Supermarché">Supermarché</option>
                 <option value="Grossiste">Grossiste</option>
+                <option value="Traiteur">Traiteur</option>
               </select>
             </div>
           </div>
