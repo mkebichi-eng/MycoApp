@@ -81,9 +81,9 @@ class ProductionDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
 
-          // Bouton Création d'un Nouveau Lot de Pasteurisation
+          // Bouton Création d'une Nouvelle Table d'Ensemencement
           MycoButton(
-            label: 'Nouveau Lot de Pasteurisation (Fût 200L)',
+            label: 'Nouvelle Table d\'Ensemencement',
             icon: Icons.add_circle_outline,
             backgroundColor: AppConstants.primaryGreen,
             onPressed: () => _showCreateBatchDialog(context, ref),
@@ -91,7 +91,7 @@ class ProductionDashboardScreen extends ConsumerWidget {
           const SizedBox(height: 20),
 
           const Text(
-            'Lots de Pasteurisation Récents :',
+            'Tables d\'Ensemencement Récentes :',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -99,7 +99,7 @@ class ProductionDashboardScreen extends ConsumerWidget {
           batchesAsync.when(
             data: (batches) {
               if (batches.isEmpty) {
-                return const Center(child: Text('Aucun lot de culture pour le moment.'));
+                return const Center(child: Text('Aucune table de culture pour le moment.'));
               }
               return Column(
                 children: batches.map((batch) {
@@ -195,12 +195,12 @@ class ProductionDashboardScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Nouveau Lot (Pasteurisation Fût 200L)'),
+          title: const Text('Nouvelle Table d\'Ensemencement'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Code du Lot')),
+                TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Code de la Table')),
                 TextField(controller: strainCtrl, decoration: const InputDecoration(labelText: 'Souche Mycélium')),
                 TextField(controller: strawDryCtrl, decoration: const InputDecoration(labelText: 'Paille sèche (kg)'), keyboardType: TextInputType.number),
                 TextField(controller: strawWetCtrl, decoration: const InputDecoration(labelText: 'Paille humide après essorage (kg)'), keyboardType: TextInputType.number),
