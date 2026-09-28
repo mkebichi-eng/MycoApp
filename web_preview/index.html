@@ -3044,6 +3044,94 @@
       container.innerHTML = html;
     }
 
+    function renderContainerCard(b, parentTable = null) {
+      const isFruit = b.status === 'fruiting';
+      const isContam = b.status === 'contaminated';
+      const isIncub = b.status === 'incubation';
+      const isSeau = b.type === 'seau';
+      const tableName = parentTable ? (parentTable.name || parentTable.id) : (b.tableId || 'Table');
+      const harvests = b.harvests || [];
+      const nextFlush = harvests.length + 1;
+      const strainName = b.strain || (parentTable ? parentTable.strain : 'Pleurote');
+
+      let incubDays = '';
+      if (b.incubationDate) {
+        const d1 = new Date(b.incubationDate);
+        const d2 = new Date();
+        const diff = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
+        incubDays = `J+${diff}`;
+      }
+
+      return `
+        <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isContam ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-mono font-bold text-white">${b.id}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded font-bold ${isSeau ? 'bg-amber-900/60 text-amber-300 border border-amber-500/30' : 'bg-[#0f1a0f] text-[#bbb] border border-[#2d4a2d]'}">
+                ${isSeau ? '🪣 Seau' : '🛍️ Sac'}
+              </span>
+              <span class="text-[10px] font-semibold text-[#7bc67e] bg-[#0f1a0f] px-1.5 py-0.5 rounded border border-[#2d4a2d]">${strainName}</span>
+              <span class="text-[10px] text-[#777]">• ${tableName}</span>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              isFruit ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' :
+              (isContam ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40')
+            }">
+              ${isFruit ? `💧 Fructif. (Volée ${nextFlush})` : (isContam ? '☣️ Contaminé' : `🌡️ Incubat. ${incubDays}`)}
+            </span>
+          </div>
+
+          <div class="flex justify-between items-center text-xs text-[#aaa] bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d]">
+            <span>Substrat : <strong class="text-white">${b.weight || 4.5} kg</strong></span>
+            <span>Total récolté : <strong class="text-emerald-400 text-sm font-bold">${(b.harvestedKg || 0).toFixed(2)} kg</strong></span>
+          </div>
+
+          ${harvests.length > 0 ? `
+            <div class="flex flex-wrap gap-1 pt-0.5">
+              ${harvests.map(h => `
+                <span class="bg-[#1f3a1f] border border-[#2d4a2d] text-[#7bc67e] text-[9px] px-1.5 py-0.5 rounded-md font-semibold">
+                  Volée ${h.flush} : ${h.weightKg} kg <span class="text-[#777]">(${h.date ? h.date.slice(5) : ''})</span>
+                </span>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          ${isContam ? `
+            <div class="bg-[#3a1a1a]/40 border border-[#e07a7a]/30 p-2 rounded-xl text-[10px] text-[#e07a7a] flex items-center justify-between">
+              <span>⚠️ Écarté pour : <strong>${b.contaminationReason || 'Contamination'}</strong></span>
+              <span>${b.contaminationDate || ''}</span>
+            </div>
+          ` : ''}
+
+          ${!isContam ? `
+            <div class="flex gap-1.5 pt-1">
+              ${isIncub ? `
+                <button onclick="moveToFruiting('${b.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold hover:bg-[#254625] transition-all flex items-center justify-center gap-1">
+                  <span>💧</span> <span>Passer en Fructification</span>
+                </button>
+              ` : `
+                <button onclick="openSingleBagHarvestModal('${b.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 transition-all flex items-center justify-center gap-1">
+                  <span>⚖️</span> <span>Peser Volée ${nextFlush}</span>
+                </button>
+              `}
+              <button onclick="openContaminationModal('${b.id}')" class="px-2.5 py-1.5 bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold hover:bg-[#4a1f1f] transition-all" title="Déclarer une avarie ou moisissure">
+                ☣️ Avarie
+              </button>
+              <button onclick="openPrintLabelsModal(null, '${b.id}')" class="px-2 py-1.5 bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] rounded-xl text-xs font-bold hover:text-white" title="Étiquette thermique 50x30mm">
+                🖨️
+              </button>
+            </div>
+          ` : `
+            <div class="flex justify-end pt-0.5">
+              <button onclick="restoreBag('${b.id}')" class="text-[10px] text-[#888] hover:text-[#bbb] underline">
+                Rétablir ce contenant en culture
+              </button>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
     function renderWeeksProductionViewHtml(activeWeeks) {
       if (activeWeeks.length === 0) {
         return `
@@ -3132,7 +3220,11 @@
                 <h4 class="text-xs font-bold text-white">${table.name || ('Table ' + table.id)}</h4>
               </div>
               <p class="text-[11px] text-[#aaa] mt-0.5">
-                <strong class="text-[#7bc67e]">${table.strain || 'Pleurote Gris'}</strong> • Ensemencée le ${table.date || ''} 
+                ${table.isSplitStrains ? `
+                  <strong class="text-[#7bc67e]">🛍️ ${table.sacsStrain || 'Sacs'}</strong> <span class="text-slate-500">•</span> <strong class="text-amber-400">🪣 ${table.seauxStrain || 'Seaux'}</strong>
+                ` : `
+                  <strong class="text-[#7bc67e]">${table.strain || 'Pleurote Gris'}</strong>
+                `} • Ensemencée le ${table.date || ''} 
                 <span class="text-slate-400 font-semibold">(J+${daysElapsed})</span>
               </p>
             </div>
@@ -3146,7 +3238,7 @@
           <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs space-y-1">
             <div class="flex justify-between text-[#bbb]">
               <span>🌾 Paille : <strong class="text-white">${table.strawBottes || 1} botte(s)</strong></span>
-              <span>🍄 Blanc : <strong class="text-white">${table.spawnSacs || 1.5} sac(s)</strong></span>
+              <span>🍄 Blanc : <strong class="text-white">${table.spawnSacs || 1.5} sac(s)</strong> ${table.isSplitStrains ? `<span class="text-[10px] text-[#888]">(${table.sacsSpawnSacs || 0}s sacs / ${table.seauxSpawnSacs || 0}s seaux)</span>` : ''}</span>
             </div>
             <div class="flex justify-between text-[#888] text-[11px] pt-0.5 border-t border-[#2d4a2d]/50">
               <span>Contenants : <strong class="text-[#bbb]">${sacsCount} sacs</strong> ${seauxCount > 0 ? `• <strong class="text-[#bbb]">${seauxCount} seaux</strong>` : ''}</span>
@@ -3300,6 +3392,7 @@
       const strawBottes = table.strawBottes || 1.0;
       const spawnSacs = table.spawnSacs || 1.5;
       const strainName = table.strain || 'Pleurote';
+      const isSplit = !!table.isSplitStrains;
 
       showModal(`
         <div class="space-y-3 text-xs">
@@ -3331,10 +3424,21 @@
               <span>🌾 Paille de blé :</span>
               <strong class="text-white">${strawBottes} botte(s)</strong>
             </div>
-            <div class="flex justify-between text-[#bbb]">
-              <span>🍄 Mycélium / Blanc (${strainName}) :</span>
-              <strong class="text-white">${spawnSacs} sac(s)</strong>
-            </div>
+            ${isSplit ? `
+              <div class="flex justify-between text-[#bbb]">
+                <span>🍄 Blanc Sacs (${table.sacsStrain || 'Sacs'}) :</span>
+                <strong class="text-[#7bc67e]">${table.sacsSpawnSacs || 0} sac(s)</strong>
+              </div>
+              <div class="flex justify-between text-[#bbb]">
+                <span>🍄 Blanc Seaux (${table.seauxStrain || 'Seaux'}) :</span>
+                <strong class="text-amber-400">${table.seauxSpawnSacs || 0} sac(s)</strong>
+              </div>
+            ` : `
+              <div class="flex justify-between text-[#bbb]">
+                <span>🍄 Mycélium / Blanc (${strainName}) :</span>
+                <strong class="text-white">${spawnSacs} sac(s)</strong>
+              </div>
+            `}
             <div class="flex justify-between text-[#888] text-[10px] pt-1 border-t border-[#2d4a2d]/50">
               <span>Contenants associés qui seront supprimés :</span>
               <strong class="text-[#bbb]">${tableBags.length} sacs & seaux</strong>
@@ -3353,7 +3457,7 @@
 
           <div class="space-y-2 pt-1">
             <button onclick="executeDeleteTable('${tableId}', true)" class="w-full py-2.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/60 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow">
-              <span>✅</span> <span>Oui, réintégrer au stock (+${strawBottes} bottes, +${spawnSacs} sacs blanc)</span>
+              <span>✅</span> <span>Oui, réintégrer au stock (+${strawBottes} bottes, ${isSplit ? `+${table.sacsSpawnSacs}s ${table.sacsStrain}, +${table.seauxSpawnSacs}s ${table.seauxStrain}` : `+${spawnSacs} sacs ${strainName}`})</span>
             </button>
 
             <button onclick="executeDeleteTable('${tableId}', false)" class="w-full py-2.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
@@ -3387,13 +3491,29 @@
           strawStock.quantity = Math.round((strawStock.quantity + strawBottes) * 10) / 10;
         }
 
-        const spawnStock = (table.spawnStockId ? state.stocks.find(s => s.id === table.spawnStockId) : null) ||
-                           state.stocks.find(s => (s.strain && s.strain.toLowerCase() === strainName.toLowerCase()) || (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes(strainName.toLowerCase())));
-        if (spawnStock) {
-          spawnStock.quantity = Math.round((spawnStock.quantity + spawnSacs) * 10) / 10;
-        }
+        if (table.isSplitStrains) {
+          const sacsStock = (table.sacsSpawnStockId ? state.stocks.find(s => s.id === table.sacsSpawnStockId) : null) ||
+                            state.stocks.find(s => (s.strain && s.strain.toLowerCase() === (table.sacsStrain || '').toLowerCase()) || (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes((table.sacsStrain || '').toLowerCase())));
+          if (sacsStock && table.sacsSpawnSacs) {
+            sacsStock.quantity = Math.round((sacsStock.quantity + table.sacsSpawnSacs) * 10) / 10;
+          }
 
-        restMsg = ` • Restitué au stock : +${strawBottes} botte(s) et +${spawnSacs} sac(s) [${strainName}]`;
+          const seauxStock = (table.seauxSpawnStockId ? state.stocks.find(s => s.id === table.seauxSpawnStockId) : null) ||
+                             state.stocks.find(s => (s.strain && s.strain.toLowerCase() === (table.seauxStrain || '').toLowerCase()) || (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes((table.seauxStrain || '').toLowerCase())));
+          if (seauxStock && table.seauxSpawnSacs) {
+            seauxStock.quantity = Math.round((seauxStock.quantity + table.seauxSpawnSacs) * 10) / 10;
+          }
+
+          restMsg = ` • Restitué au stock : +${strawBottes} botte(s), +${table.sacsSpawnSacs} sac(s) [${table.sacsStrain}], +${table.seauxSpawnSacs} sac(s) [${table.seauxStrain}]`;
+        } else {
+          const spawnStock = (table.spawnStockId ? state.stocks.find(s => s.id === table.spawnStockId) : null) ||
+                             state.stocks.find(s => (s.strain && s.strain.toLowerCase() === strainName.toLowerCase()) || (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes(strainName.toLowerCase())));
+          if (spawnStock) {
+            spawnStock.quantity = Math.round((spawnStock.quantity + spawnSacs) * 10) / 10;
+          }
+
+          restMsg = ` • Restitué au stock : +${strawBottes} botte(s) et +${spawnSacs} sac(s) [${strainName}]`;
+        }
       }
 
       state.bags = (state.bags || []).filter(b => b.tableId !== tableId && b.batchId !== tableId);
@@ -3410,7 +3530,7 @@
       if (weekTables.length === 0) return;
 
       const totalStraw = weekTables.reduce((sum, t) => sum + (t.strawBottes || 1), 0);
-      const totalSpawn = weekTables.reduce((sum, t) => sum + (t.spawnSacs || 1.5), 0);
+      const totalSpawn = Math.round(weekTables.reduce((sum, t) => sum + (t.spawnSacs || 1.5), 0) * 10) / 10;
       const wInfo = getWeekInfo(weekTables[0]?.date);
 
       showModal(`
@@ -3483,14 +3603,23 @@
       const weekInfo = getWeekInfo(defaultDate);
 
       let strainOptionsHtml = '';
+      let seauxStrainOptionsHtml = '';
       if (availableSpawnStocks.length > 0) {
         strainOptionsHtml = availableSpawnStocks.map((s, idx) => {
           const bagWt = s.bagWeightKg || 2.0;
           const totalKg = (s.quantity * bagWt).toFixed(1);
           return `<option value="${s.id}" ${idx === 0 ? 'selected' : ''}>${s.strain || s.name} — Dispo: ${s.quantity} sacs (${totalKg} kg)</option>`;
         }).join('');
+
+        const seauxDefaultIdx = availableSpawnStocks.length > 1 ? 1 : 0;
+        seauxStrainOptionsHtml = availableSpawnStocks.map((s, idx) => {
+          const bagWt = s.bagWeightKg || 2.0;
+          const totalKg = (s.quantity * bagWt).toFixed(1);
+          return `<option value="${s.id}" ${idx === seauxDefaultIdx ? 'selected' : ''}>${s.strain || s.name} — Dispo: ${s.quantity} sacs (${totalKg} kg)</option>`;
+        }).join('');
       } else {
         strainOptionsHtml = `<option value="">⚠️ Aucun mycélium disponible en stock</option>`;
+        seauxStrainOptionsHtml = `<option value="">⚠️ Aucun mycélium disponible en stock</option>`;
       }
 
       showModal(`
@@ -3526,58 +3655,6 @@
             <input id="table-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold" value="Table Inox ${nextTableNum}">
           </div>
 
-          <!-- Choix obligatoire d'une souche disponible en stock -->
-          <div>
-            <label class="text-[#7bc67e] font-bold block mb-1 flex items-center justify-between">
-              <span>Souche de mycélium (Disponible en stock) :</span>
-              <button onclick="openAddSpawnStrainModal()" type="button" class="text-[10px] text-[#7bc67e] hover:underline font-bold">+ Approvisionner souche</button>
-            </label>
-            <select id="table-spawn-stock-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold text-xs" onchange="onTableSpawnStockChange(this.value)">
-              ${strainOptionsHtml}
-            </select>
-            ${availableSpawnStocks.length === 0 ? `
-              <p class="text-[10px] text-[#e07a7a] mt-1 bg-[#2a1a1a] p-1.5 rounded-lg border border-[#5a2a2a]">
-                ⛔ Aucun sac de mycélium en stock ! Vous devez d'abord approvisionner une souche via le bouton ci-dessus.
-              </p>
-            ` : ''}
-          </div>
-
-          <!-- Section Déduction Matières Premières & Blocage Strict -->
-          <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2">
-            <label class="text-[#7bc67e] font-bold block flex items-center justify-between">
-              <span>🌾 Matières Premières (Déduction & Blocage Strict)</span>
-              <span class="text-[9px] bg-red-950 text-red-300 border border-red-500/40 px-1.5 py-0.2 rounded-full font-bold">Contrôle strict</span>
-            </label>
-
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-[#aaa] block text-[11px] mb-0.5">Paille pasteurisée :</label>
-                <div class="relative">
-                  <input id="table-straw-bottes" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.0" oninput="checkTableStockLive()">
-                  <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">bottes</span>
-                </div>
-                <span id="table-straw-avail-text" class="text-[9px] text-[#888] block mt-0.5">
-                  En stock : <strong class="${strawAvail < 1 ? 'text-[#e07a7a]' : 'text-white'}">${strawAvail} bottes</strong>
-                </span>
-              </div>
-
-              <div>
-                <label class="text-[#aaa] block text-[11px] mb-0.5">Mycélium / Blanc :</label>
-                <div class="relative">
-                  <input id="table-spawn-sacs" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.5" oninput="checkTableStockLive()">
-                  <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">sacs</span>
-                </div>
-                <span id="table-spawn-avail-text" class="text-[9px] text-[#888] block mt-0.5">
-                  <!-- Actualisé en temps réel -->
-                </span>
-              </div>
-            </div>
-
-            <!-- Message d'alerte direct si stock insuffisant -->
-            <div id="table-stock-alert-msg" class="hidden p-2 bg-[#2a1a1a] border border-[#5a2a2a] rounded-xl text-[10px] text-[#e07a7a] font-bold">
-            </div>
-          </div>
-
           <!-- Section Contenants Générés -->
           <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-2">
             <label class="text-white font-bold block flex justify-between items-center">
@@ -3587,17 +3664,131 @@
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[#aaa] block text-[11px] mb-0.5">🛍️ Nombre de Sacs :</label>
-                <input id="table-sacs-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="14">
+                <input id="table-sacs-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="14" oninput="onContainerCountsChange()">
               </div>
               <div>
                 <label class="text-[#aaa] block text-[11px] mb-0.5">🪣 Nombre de Seaux :</label>
-                <input id="table-seaux-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="2">
+                <input id="table-seaux-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="2" oninput="onContainerCountsChange()">
               </div>
             </div>
 
             <div>
               <label class="text-[#aaa] block text-[11px] mb-0.5">Poids moyen de substrat par contenant (kg) :</label>
               <input id="table-weight-per-container" type="number" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="4.5">
+            </div>
+
+            <!-- Option Variété / Souche Différente pour les Seaux (visible quand seaux > 0) -->
+            <div id="table-split-toggle-box" class="pt-2 border-t border-[#2d4a2d]/60">
+              <label class="flex items-center gap-2 cursor-pointer select-none bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d] hover:border-[#7bc67e]/50 transition-all">
+                <input type="checkbox" id="table-split-strains" class="w-4 h-4 rounded accent-[#4a9e4e]" onchange="onToggleSplitStrains(this.checked)">
+                <span class="text-xs font-bold text-[#e0b87a]">🔀 Souche de mycélium différente pour les seaux</span>
+              </label>
+              <p class="text-[10px] text-[#888] mt-1 ml-1">Cochez pour choisir une variété pour les sacs et une autre pour les seaux.</p>
+            </div>
+          </div>
+
+          <!-- Section Déduction Matières Premières & Blocage Strict -->
+          <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2.5">
+            <label class="text-[#7bc67e] font-bold block flex items-center justify-between">
+              <span>🌾 Matières Premières (Déduction & Blocage Strict)</span>
+              <span class="text-[9px] bg-red-950 text-red-300 border border-red-500/40 px-1.5 py-0.2 rounded-full font-bold">Contrôle strict</span>
+            </label>
+
+            <!-- Consommation Paille -->
+            <div>
+              <div class="flex justify-between items-center mb-0.5">
+                <label class="text-[#aaa] text-[11px]">🌾 Paille pasteurisée :</label>
+                <span id="table-straw-avail-text" class="text-[9px] text-[#888]">
+                  En stock : <strong class="${strawAvail < 1 ? 'text-[#e07a7a]' : 'text-white'}">${strawAvail} bottes</strong>
+                </span>
+              </div>
+              <div class="relative">
+                <input id="table-straw-bottes" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.0" oninput="checkTableStockLive()">
+                <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">bottes</span>
+              </div>
+            </div>
+
+            <!-- MODE 1 : Souche Unique (Par défaut) -->
+            <div id="table-single-strain-section" class="space-y-2 pt-1 border-t border-[#2d4a2d]/50">
+              <div>
+                <label class="text-[#7bc67e] font-bold block mb-1 flex items-center justify-between">
+                  <span>🍄 Souche de mycélium (Disponible en stock) :</span>
+                  <button onclick="openAddSpawnStrainModal()" type="button" class="text-[10px] text-[#7bc67e] hover:underline font-bold">+ Approvisionner souche</button>
+                </label>
+                <select id="table-spawn-stock-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold text-xs" onchange="onTableSpawnStockChange(this.value)">
+                  ${strainOptionsHtml}
+                </select>
+              </div>
+
+              <div>
+                <div class="flex justify-between items-center mb-0.5">
+                  <label class="text-[#aaa] text-[11px]">🍄 Quantité de Mycélium / Blanc (sacs de 2kg) :</label>
+                  <span id="table-spawn-avail-text" class="text-[9px] text-[#888]">
+                    <!-- Actualisé en temps réel -->
+                  </span>
+                </div>
+                <div class="relative">
+                  <input id="table-spawn-sacs" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.5" oninput="checkTableStockLive()">
+                  <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">sacs</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODE 2 : Souches Séparées (Sacs vs Seaux) -->
+            <div id="table-split-strain-section" class="hidden space-y-2.5 pt-1 border-t border-[#2d4a2d]/50">
+              <div class="flex justify-between items-center">
+                <span class="text-[11px] font-bold text-amber-300">🔀 Répartition par type de contenant :</span>
+                <button onclick="openAddSpawnStrainModal()" type="button" class="text-[10px] text-[#7bc67e] hover:underline font-bold">+ Approvisionner souche</button>
+              </div>
+
+              <!-- Bloc 1 : Sacs -->
+              <div class="p-2.5 bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-bold text-[#7bc67e] flex items-center gap-1">
+                    <span>🛍️</span> <span>Souche pour les SACS :</span>
+                  </label>
+                  <span id="table-split-sacs-avail-text" class="text-[9px] text-[#888]"></span>
+                </div>
+                <select id="table-split-sacs-stock-id" class="w-full bg-[#142214] border border-[#2d4a2d] rounded-lg p-2 text-white font-semibold text-xs" onchange="checkTableStockLive()">
+                  ${strainOptionsHtml}
+                </select>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-[#aaa] whitespace-nowrap">Dose pour les sacs :</span>
+                  <div class="relative flex-1">
+                    <input id="table-split-sacs-qty" type="number" step="0.1" min="0.1" class="w-full bg-[#142214] border border-[#2d4a2d] rounded-lg p-1.5 text-white font-bold text-xs" value="1.0" oninput="checkTableStockLive()">
+                    <span class="absolute right-2 top-1.5 text-[#7bc67e] text-[10px] font-semibold">sacs</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bloc 2 : Seaux -->
+              <div class="p-2.5 bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-bold text-amber-400 flex items-center gap-1">
+                    <span>🪣</span> <span>Souche pour les SEAUX :</span>
+                  </label>
+                  <span id="table-split-seaux-avail-text" class="text-[9px] text-[#888]"></span>
+                </div>
+                <select id="table-split-seaux-stock-id" class="w-full bg-[#142214] border border-[#2d4a2d] rounded-lg p-2 text-white font-semibold text-xs" onchange="checkTableStockLive()">
+                  ${seauxStrainOptionsHtml}
+                </select>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-[#aaa] whitespace-nowrap">Dose pour les seaux :</span>
+                  <div class="relative flex-1">
+                    <input id="table-split-seaux-qty" type="number" step="0.1" min="0.1" class="w-full bg-[#142214] border border-[#2d4a2d] rounded-lg p-1.5 text-white font-bold text-xs" value="0.5" oninput="checkTableStockLive()">
+                    <span class="absolute right-2 top-1.5 text-amber-400 text-[10px] font-semibold">sacs</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-[#142214] p-2 rounded-lg border border-[#2d4a2d] flex justify-between text-[11px] text-[#bbb]">
+                <span>Total blanc consommé sur la table :</span>
+                <strong class="text-white font-mono"><span id="table-split-total-qty">1.5</span> sac(s)</strong>
+              </div>
+            </div>
+
+            <!-- Message d'alerte direct si stock insuffisant -->
+            <div id="table-stock-alert-msg" class="hidden p-2 bg-[#2a1a1a] border border-[#5a2a2a] rounded-xl text-[10px] text-[#e07a7a] font-bold">
             </div>
           </div>
 
@@ -3615,6 +3806,7 @@
         </div>
       `);
 
+      onContainerCountsChange();
       onTableSpawnStockChange(document.getElementById('table-spawn-stock-id')?.value);
     }
 
@@ -3622,6 +3814,38 @@
       const wInfo = getWeekInfo(dateVal);
       const labelEl = document.getElementById('table-modal-week-label');
       if (labelEl) labelEl.innerText = wInfo.weekLabel;
+    }
+
+    function onContainerCountsChange() {
+      const seauxCount = parseInt(document.getElementById('table-seaux-count')?.value) || 0;
+      const splitToggleBox = document.getElementById('table-split-toggle-box');
+      const splitCheckbox = document.getElementById('table-split-strains');
+      if (splitToggleBox) {
+        if (seauxCount > 0) {
+          splitToggleBox.classList.remove('hidden');
+        } else {
+          splitToggleBox.classList.add('hidden');
+          if (splitCheckbox && splitCheckbox.checked) {
+            splitCheckbox.checked = false;
+            onToggleSplitStrains(false);
+          }
+        }
+      }
+      checkTableStockLive();
+    }
+
+    function onToggleSplitStrains(isSplit) {
+      const singleSection = document.getElementById('table-single-strain-section');
+      const splitSection = document.getElementById('table-split-strain-section');
+      if (singleSection) {
+        if (isSplit) singleSection.classList.add('hidden');
+        else singleSection.classList.remove('hidden');
+      }
+      if (splitSection) {
+        if (isSplit) splitSection.classList.remove('hidden');
+        else splitSection.classList.add('hidden');
+      }
+      checkTableStockLive();
     }
 
     function onTableSpawnStockChange(stockId) {
@@ -3643,20 +3867,73 @@
       const strawAvail = strawStock ? strawStock.quantity : 0;
       const strawReq = parseFloat(document.getElementById('table-straw-bottes')?.value) || 0;
 
-      const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
-      const spawnStock = state.stocks.find(s => s.id === spawnStockId);
-      const spawnAvail = spawnStock ? spawnStock.quantity : 0;
-      const spawnReq = parseFloat(document.getElementById('table-spawn-sacs')?.value) || 0;
-
+      const isSplit = !!(document.getElementById('table-split-strains')?.checked);
       const alertBox = document.getElementById('table-stock-alert-msg');
       const submitBtn = document.getElementById('btn-submit-table');
 
       let errors = [];
       if (strawReq > strawAvail) {
-        errors.push(`Paille insuffisante : ${strawReq} bottes demandées vs ${strawAvail} en stock.`);
+        errors.push(`🌾 Paille insuffisante : ${strawReq} bottes demandées vs ${strawAvail} en stock.`);
       }
-      if (!spawnStock || spawnReq > spawnAvail) {
-        errors.push(`Mycélium insuffisant : ${spawnReq} sacs demandés vs ${spawnAvail} en stock.`);
+
+      if (!isSplit) {
+        const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
+        const spawnStock = state.stocks.find(s => s.id === spawnStockId);
+        const spawnAvail = spawnStock ? spawnStock.quantity : 0;
+        const spawnReq = parseFloat(document.getElementById('table-spawn-sacs')?.value) || 0;
+        const strainName = spawnStock ? (spawnStock.strain || spawnStock.name) : 'cette souche';
+
+        const availEl = document.getElementById('table-spawn-avail-text');
+        if (availEl) {
+          if (spawnStock) {
+            const bagWt = spawnStock.bagWeightKg || 2.0;
+            availEl.innerHTML = `En stock : <strong class="${spawnAvail < spawnReq ? 'text-[#e07a7a]' : 'text-white'}">${spawnAvail} sacs</strong> (${(spawnAvail * bagWt).toFixed(1)} kg)`;
+          } else {
+            availEl.innerHTML = `<span class="text-[#e07a7a] font-bold">0 sac disponible</span>`;
+          }
+        }
+
+        if (!spawnStock || spawnReq > spawnAvail) {
+          errors.push(`🍄 Mycélium insuffisant (${strainName}) : ${spawnReq} sacs demandés vs ${spawnAvail} en stock.`);
+        }
+      } else {
+        const sacsStockId = document.getElementById('table-split-sacs-stock-id')?.value;
+        const sacsStock = state.stocks.find(s => s.id === sacsStockId);
+        const sacsAvail = sacsStock ? sacsStock.quantity : 0;
+        const sacsReq = parseFloat(document.getElementById('table-split-sacs-qty')?.value) || 0;
+        const sacsStrainName = sacsStock ? (sacsStock.strain || sacsStock.name) : 'Sacs';
+
+        const seauxStockId = document.getElementById('table-split-seaux-stock-id')?.value;
+        const seauxStock = state.stocks.find(s => s.id === seauxStockId);
+        const seauxAvail = seauxStock ? seauxStock.quantity : 0;
+        const seauxReq = parseFloat(document.getElementById('table-split-seaux-qty')?.value) || 0;
+        const seauxStrainName = seauxStock ? (seauxStock.strain || seauxStock.name) : 'Seaux';
+
+        const sacsAvailEl = document.getElementById('table-split-sacs-avail-text');
+        if (sacsAvailEl && sacsStock) {
+          sacsAvailEl.innerHTML = `Dispo : <strong class="${sacsAvail < sacsReq ? 'text-[#e07a7a]' : 'text-[#7bc67e]'}">${sacsAvail} sacs</strong>`;
+        }
+        const seauxAvailEl = document.getElementById('table-split-seaux-avail-text');
+        if (seauxAvailEl && seauxStock) {
+          seauxAvailEl.innerHTML = `Dispo : <strong class="${seauxAvail < seauxReq ? 'text-[#e07a7a]' : 'text-amber-400'}">${seauxAvail} sacs</strong>`;
+        }
+
+        const totalReq = Math.round((sacsReq + seauxReq) * 10) / 10;
+        const totalSpan = document.getElementById('table-split-total-qty');
+        if (totalSpan) totalSpan.innerText = totalReq;
+
+        if (sacsStockId === seauxStockId) {
+          if (!sacsStock || totalReq > sacsAvail) {
+            errors.push(`🍄 Mycélium insuffisant (${sacsStrainName}) : ${totalReq} sacs au total requis (sacs + seaux) vs ${sacsAvail} en stock.`);
+          }
+        } else {
+          if (!sacsStock || sacsReq > sacsAvail) {
+            errors.push(`🍄 Mycélium Sacs (${sacsStrainName}) insuffisant : ${sacsReq} sacs requis vs ${sacsAvail} en stock.`);
+          }
+          if (!seauxStock || seauxReq > seauxAvail) {
+            errors.push(`🍄 Mycélium Seaux (${seauxStrainName}) insuffisant : ${seauxReq} sacs requis vs ${seauxAvail} en stock.`);
+          }
+        }
       }
 
       if (errors.length > 0) {
@@ -3666,10 +3943,14 @@
         }
         if (submitBtn) {
           submitBtn.classList.add('opacity-50');
+          submitBtn.setAttribute('disabled', 'true');
         }
       } else {
         if (alertBox) alertBox.classList.add('hidden');
-        if (submitBtn) submitBtn.classList.remove('opacity-50');
+        if (submitBtn) {
+          submitBtn.classList.remove('opacity-50');
+          submitBtn.removeAttribute('disabled');
+        }
       }
     }
 
@@ -3677,16 +3958,19 @@
       const code = (document.getElementById('table-code').value || '').trim();
       const name = (document.getElementById('table-name').value || '').trim() || ('Table ' + code);
       const date = document.getElementById('table-date').value || new Date().toISOString().slice(0, 10);
-      const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
       const strawBottes = parseFloat(document.getElementById('table-straw-bottes').value) || 0;
-      const spawnSacs = parseFloat(document.getElementById('table-spawn-sacs').value) || 0;
       const sacsCount = parseInt(document.getElementById('table-sacs-count').value) || 0;
       const seauxCount = parseInt(document.getElementById('table-seaux-count').value) || 0;
       const weightPerContainer = parseFloat(document.getElementById('table-weight-per-container').value) || 4.5;
       const notes = (document.getElementById('table-notes').value || '').trim();
+      const isSplit = seauxCount > 0 && !!(document.getElementById('table-split-strains')?.checked);
 
       if (!code) {
         alert('Veuillez saisir un code pour cette table.');
+        return;
+      }
+      if (sacsCount === 0 && seauxCount === 0) {
+        alert('Veuillez indiquer au moins 1 sac ou 1 seau pour cette table.');
         return;
       }
 
@@ -3701,13 +3985,61 @@
         return;
       }
 
-      // 2. Contrôle Mycélium / Souche
-      const spawnStock = state.stocks.find(s => s.id === spawnStockId);
-      const spawnAvail = spawnStock ? spawnStock.quantity : 0;
-      const strainName = spawnStock ? (spawnStock.strain || spawnStock.name) : 'cette souche';
-      if (!spawnStock || spawnSacs > spawnAvail) {
-        alert(`⛔ CRÉATION BLOQUÉE : STOCK DE MYCÉLIUM INSUFFISANT !\n\nSouche sélectionnée : ${strainName}\nQuantité requise : ${spawnSacs} sacs\nQuantité disponible en stock : ${spawnAvail} sacs (${(spawnAvail * (spawnStock?.bagWeightKg || 2)).toFixed(1)} kg)\n\nVeuillez réapprovisionner cette souche ou ajuster le nombre de sacs avant de continuer.`);
-        return;
+      let spawnStock = null;
+      let spawnSacs = 0;
+      let strainName = '';
+
+      let sacsStock = null;
+      let sacsReq = 0;
+      let sacsStrainName = '';
+
+      let seauxStock = null;
+      let seauxReq = 0;
+      let seauxStrainName = '';
+
+      if (!isSplit) {
+        const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
+        spawnStock = state.stocks.find(s => s.id === spawnStockId);
+        const spawnAvail = spawnStock ? spawnStock.quantity : 0;
+        spawnSacs = parseFloat(document.getElementById('table-spawn-sacs').value) || 0;
+        strainName = spawnStock ? (spawnStock.strain || spawnStock.name) : 'cette souche';
+
+        if (!spawnStock || spawnSacs > spawnAvail) {
+          alert(`⛔ CRÉATION BLOQUÉE : STOCK DE MYCÉLIUM INSUFFISANT !\n\nSouche sélectionnée : ${strainName}\nQuantité requise : ${spawnSacs} sacs\nQuantité disponible en stock : ${spawnAvail} sacs (${(spawnAvail * (spawnStock?.bagWeightKg || 2)).toFixed(1)} kg)\n\nVeuillez réapprovisionner cette souche ou ajuster le nombre de sacs avant de continuer.`);
+          return;
+        }
+      } else {
+        const sacsStockId = document.getElementById('table-split-sacs-stock-id')?.value;
+        sacsStock = state.stocks.find(s => s.id === sacsStockId);
+        const sacsAvail = sacsStock ? sacsStock.quantity : 0;
+        sacsReq = parseFloat(document.getElementById('table-split-sacs-qty').value) || 0;
+        sacsStrainName = sacsStock ? (sacsStock.strain || sacsStock.name) : 'Sacs';
+
+        const seauxStockId = document.getElementById('table-split-seaux-stock-id')?.value;
+        seauxStock = state.stocks.find(s => s.id === seauxStockId);
+        const seauxAvail = seauxStock ? seauxStock.quantity : 0;
+        seauxReq = parseFloat(document.getElementById('table-split-seaux-qty').value) || 0;
+        seauxStrainName = seauxStock ? (seauxStock.strain || seauxStock.name) : 'Seaux';
+
+        const totalReq = Math.round((sacsReq + seauxReq) * 10) / 10;
+        spawnSacs = totalReq;
+        strainName = `${sacsStrainName} (Sacs) + ${seauxStrainName} (Seaux)`;
+
+        if (sacsStockId === seauxStockId) {
+          if (!sacsStock || totalReq > sacsAvail) {
+            alert(`⛔ CRÉATION BLOQUÉE : STOCK INSUFFISANT !\n\nSouche : ${sacsStrainName}\nQuantité totale requise (sacs + seaux) : ${totalReq} sacs\nQuantité disponible : ${sacsAvail} sacs`);
+            return;
+          }
+        } else {
+          if (!sacsStock || sacsReq > sacsAvail) {
+            alert(`⛔ CRÉATION BLOQUÉE : STOCK INSUFFISANT POUR LES SACS !\n\nSouche Sacs : ${sacsStrainName}\nQuantité requise : ${sacsReq} sacs\nQuantité disponible : ${sacsAvail} sacs`);
+            return;
+          }
+          if (!seauxStock || seauxReq > seauxAvail) {
+            alert(`⛔ CRÉATION BLOQUÉE : STOCK INSUFFISANT POUR LES SEAUX !\n\nSouche Seaux : ${seauxStrainName}\nQuantité requise : ${seauxReq} sacs\nQuantité disponible : ${seauxAvail} sacs`);
+            return;
+          }
+        }
       }
 
       // 3. Déduction stricte du stock de paille
@@ -3715,9 +4047,22 @@
         strawStock.quantity = Math.max(0, Math.round((strawStock.quantity - strawBottes) * 10) / 10);
       }
 
-      // 4. Déduction stricte du stock de mycélium sur la souche exacte
-      if (spawnStock && spawnSacs > 0) {
-        spawnStock.quantity = Math.max(0, Math.round((spawnStock.quantity - spawnSacs) * 10) / 10);
+      // 4. Déduction stricte du stock de mycélium sur la ou les souches exactes
+      if (!isSplit) {
+        if (spawnStock && spawnSacs > 0) {
+          spawnStock.quantity = Math.max(0, Math.round((spawnStock.quantity - spawnSacs) * 10) / 10);
+        }
+      } else {
+        if (sacsStock.id === seauxStock.id) {
+          sacsStock.quantity = Math.max(0, Math.round((sacsStock.quantity - (sacsReq + seauxReq)) * 10) / 10);
+        } else {
+          if (sacsStock && sacsReq > 0) {
+            sacsStock.quantity = Math.max(0, Math.round((sacsStock.quantity - sacsReq) * 10) / 10);
+          }
+          if (seauxStock && seauxReq > 0) {
+            seauxStock.quantity = Math.max(0, Math.round((seauxStock.quantity - seauxReq) * 10) / 10);
+          }
+        }
       }
 
       // 5. Déduction des sacs plastiques de culture si en stock
@@ -3737,7 +4082,14 @@
         weekId: weekInfo.weekId,
         weekLabel: weekInfo.weekLabel,
         strain: strainName,
-        spawnStockId: spawnStock.id,
+        spawnStockId: isSplit ? null : spawnStock.id,
+        isSplitStrains: isSplit,
+        sacsStrain: isSplit ? sacsStrainName : strainName,
+        sacsSpawnStockId: isSplit ? sacsStock.id : spawnStock.id,
+        sacsSpawnSacs: isSplit ? sacsReq : spawnSacs,
+        seauxStrain: isSplit ? seauxStrainName : strainName,
+        seauxSpawnStockId: isSplit ? seauxStock.id : (seauxCount > 0 ? spawnStock.id : null),
+        seauxSpawnSacs: isSplit ? seauxReq : 0,
         substrate: 'Paille de blé pasteurisée',
         strawBottes: strawBottes,
         spawnSacs: spawnSacs,
@@ -3766,7 +4118,7 @@
 
       const cleanCode = code.replace(/[^A-Za-z0-9]/g, '');
 
-      // 8. Génération des sacs individuels
+      // 8. Génération des sacs individuels (avec leur souche précise)
       for (let i = 1; i <= sacsCount; i++) {
         const numStr = i.toString().padStart(2, '0');
         state.bags.unshift({
@@ -3776,7 +4128,7 @@
           type: 'sac',
           status: 'incubation',
           weight: weightPerContainer,
-          strain: strainName,
+          strain: isSplit ? sacsStrainName : strainName,
           incubationDate: date,
           fruitingDate: null,
           contaminationDate: null,
@@ -3786,7 +4138,7 @@
         });
       }
 
-      // 9. Génération des seaux individuels
+      // 9. Génération des seaux individuels (avec leur souche précise)
       for (let i = 1; i <= seauxCount; i++) {
         const numStr = i.toString().padStart(2, '0');
         state.bags.unshift({
@@ -3796,7 +4148,7 @@
           type: 'seau',
           status: 'incubation',
           weight: weightPerContainer,
-          strain: strainName,
+          strain: isSplit ? seauxStrainName : strainName,
           incubationDate: date,
           fruitingDate: null,
           contaminationDate: null,
@@ -3811,7 +4163,12 @@
 
       saveState();
       closeModal();
-      showToast(`Table ${code} créée dans ${weekInfo.shortTitle} ! Stock déduit : -${strawBottes} botte(s), -${spawnSacs} sac(s) (${strainName}).`);
+
+      const deductDetail = isSplit
+        ? `-${strawBottes} botte(s), -${sacsReq} sac(s) (${sacsStrainName}), -${seauxReq} sac(s) (${seauxStrainName})`
+        : `-${strawBottes} botte(s), -${spawnSacs} sac(s) (${strainName})`;
+
+      showToast(`Table ${code} créée dans ${weekInfo.shortTitle} ! Stock déduit : ${deductDetail}.`);
     }
 
     function moveToFruiting(id) {
