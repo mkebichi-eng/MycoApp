@@ -352,9 +352,18 @@
           createdAt: '18 Sep 11:00'
         }
       ],
+      strains: [
+        'Pleurote Gris HK35',
+        'Pleurote Jaune (Cornucopiae)',
+        'Pleurote Blanc Sporesol',
+        'Pleurote Plein Air (Ostreatus)',
+        'Shiitaké (Lentinula edodes)'
+      ],
       stocks: [
         { id: 'stk_01', name: "Paille de blé (Bottes)", category: "Matière première", quantity: 45, unit: "bottes", threshold: 10, cost: 450 },
-        { id: 'stk_02', name: "Mycélium Pleurote HK35 (Sacs 2kg)", category: "Semence/Blanc", quantity: 12, unit: "sacs", threshold: 4, cost: 1800 },
+        { id: 'stk_spawn_hk35', name: "Mycélium Pleurote Gris HK35", strain: "Pleurote Gris HK35", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 6, unit: "sacs", threshold: 2, cost: 1800 },
+        { id: 'stk_spawn_jaune', name: "Mycélium Pleurote Jaune", strain: "Pleurote Jaune (Cornucopiae)", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 4, unit: "sacs", threshold: 2, cost: 1900 },
+        { id: 'stk_spawn_blanc', name: "Mycélium Pleurote Blanc Sporesol", strain: "Pleurote Blanc Sporesol", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 2, unit: "sacs", threshold: 1, cost: 1850 },
         { id: 'stk_03', name: "Sacs de culture micro-perforés", category: "Consommable", quantity: 120, unit: "unités", threshold: 50, cost: 25 },
         { id: 'stk_04', name: "Seaux plastique réutilisables", category: "Équipement", quantity: 24, unit: "unités", threshold: 10, cost: 250 },
         { id: 'stk_05', name: "Alcool à 70° désinfection", category: "Sanitation", quantity: 12, unit: "L", threshold: 5, cost: 450 },
@@ -365,7 +374,9 @@
           id: 'TAB-01',
           name: 'Table Inox 1 (Pleurote Gris)',
           date: '2026-09-08',
+          weekId: '2026-W37',
           strain: 'Pleurote Gris HK35',
+          spawnStockId: 'stk_spawn_hk35',
           substrate: 'Paille de blé pasteurisée',
           strawBottes: 1.0,
           spawnSacs: 1.5,
@@ -379,7 +390,9 @@
           id: 'TAB-02',
           name: 'Table Inox 2 (Pleurote Gris)',
           date: '2026-09-18',
+          weekId: '2026-W38',
           strain: 'Pleurote Gris HK35',
+          spawnStockId: 'stk_spawn_hk35',
           substrate: 'Paille de blé pasteurisée',
           strawBottes: 1.0,
           spawnSacs: 1.5,
@@ -462,39 +475,63 @@
       ]
     };
 
-    let storedState = JSON.parse(localStorage.getItem('mycotrack_state_v7') || 'null');
+    function getWeekInfo(dateString) {
+      const d = dateString ? new Date(dateString) : new Date();
+      const target = new Date(d.valueOf());
+      const dayNr = (d.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+      target.setDate(target.getDate() - dayNr + 3);
+      const firstThursday = target.valueOf();
+      target.setMonth(0, 1);
+      if (target.getDay() !== 4) {
+        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+      }
+      const weekNum = 1 + Math.ceil((firstThursday - target) / 604800000);
+
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - dayNr);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+      const mStr = `${monday.getDate().toString().padStart(2, '0')} ${months[monday.getMonth()]}`;
+      const sStr = `${sunday.getDate().toString().padStart(2, '0')} ${months[sunday.getMonth()]}`;
+
+      const weekId = `${monday.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
+      const weekLabel = `Semaine ${weekNum} • ${mStr} au ${sStr} ${sunday.getFullYear()}`;
+      const shortTitle = `Semaine ${weekNum}`;
+
+      return { weekId, weekLabel, shortTitle, weekNum };
+    }
+
+    let storedState = JSON.parse(localStorage.getItem('mycotrack_state_v8') || 'null');
     if (!storedState) {
-      const v6State = JSON.parse(localStorage.getItem('mycotrack_state_v6') || 'null') ||
-                      JSON.parse(localStorage.getItem('mycotrack_state_v5') || 'null');
-      if (v6State) {
+      const v7State = JSON.parse(localStorage.getItem('mycotrack_state_v7') || 'null') ||
+                      JSON.parse(localStorage.getItem('mycotrack_state_v6') || 'null');
+      if (v7State) {
         storedState = {
           ...initialSeedState,
-          ...v6State,
-          stocks: (v6State.stocks && v6State.stocks.length > 0) ? v6State.stocks.map(s => {
-            if (s.id === 'stk_01' && (s.unit === 'kg' || s.name.includes('hachée'))) {
-              return { ...s, name: "Paille de blé (Bottes)", unit: "bottes", quantity: 45, threshold: 10, cost: 450 };
+          ...v7State,
+          strains: (v7State.strains && v7State.strains.length > 0) ? v7State.strains : initialSeedState.strains,
+          stocks: (v7State.stocks && v7State.stocks.some(s => s.strain)) ? v7State.stocks : initialSeedState.stocks,
+          tables: (v7State.tables && v7State.tables.length > 0) ? v7State.tables.map(t => {
+            if (!t.weekId && t.date) {
+              const w = getWeekInfo(t.date);
+              return { ...t, weekId: w.weekId, weekLabel: w.weekLabel };
             }
-            if (s.id === 'stk_02' && (s.unit === 'kg' || s.name.includes('Seigle'))) {
-              return { ...s, name: "Mycélium Pleurote HK35 (Sacs 2kg)", unit: "sacs", quantity: 12, threshold: 4, cost: 1800 };
-            }
-            return s;
-          }) : initialSeedState.stocks,
-          tables: (v6State.tables && v6State.tables.length > 0) ? v6State.tables : initialSeedState.tables,
-          bags: (v6State.bags && v6State.bags.some(b => b.tableId)) ? v6State.bags : initialSeedState.bags
+            return t;
+          }) : initialSeedState.tables,
+          bags: (v7State.bags && v7State.bags.some(b => b.tableId)) ? v7State.bags : initialSeedState.bags
         };
       }
     }
     let state = storedState || initialSeedState;
-    if (!state.tables || state.tables.length === 0) {
-      state.tables = initialSeedState.tables;
-    }
-    if (!state.bags || state.bags.length === 0 || !state.bags[0].tableId) {
-      state.bags = initialSeedState.bags;
-    }
+    if (!state.strains) state.strains = initialSeedState.strains;
+    if (!state.tables || state.tables.length === 0) state.tables = initialSeedState.tables;
+    if (!state.bags || state.bags.length === 0 || !state.bags[0].tableId) state.bags = initialSeedState.bags;
 
     function saveState() {
+      localStorage.setItem('mycotrack_state_v8', JSON.stringify(state));
       localStorage.setItem('mycotrack_state_v7', JSON.stringify(state));
-      localStorage.setItem('mycotrack_state_v6', JSON.stringify(state));
       checkBadges();
       renderCurrentView();
     }
@@ -2068,8 +2105,15 @@
     }
 
     function renderStocksSubViewHtml(lowCount) {
+      const spawnStocks = (state.stocks || []).filter(s => s.category === 'Semence/Blanc' || (s.unit === 'sacs' && s.strain));
+      const otherStocks = (state.stocks || []).filter(s => !(s.category === 'Semence/Blanc' || (s.unit === 'sacs' && s.strain)));
+
+      const totalSpawnSacs = spawnStocks.reduce((sum, s) => sum + (s.quantity || 0), 0);
+      const totalSpawnKg = spawnStocks.reduce((sum, s) => sum + ((s.quantity || 0) * (s.bagWeightKg || 2.0)), 0);
+      const lowSpawnCount = spawnStocks.filter(s => s.quantity <= s.threshold).length;
+
       return `
-        <!-- Statut du Stock (Alerte uniquement si nécessaire, sans estimation inutile) -->
+        <!-- Statut du Stock Global -->
         ${lowCount > 0 ? `
           <div class="mb-2.5 p-2 bg-[#2a1a1a]/70 border border-[#5a2a2a] rounded-xl flex items-center justify-between text-xs text-[#e07a7a]">
             <span class="flex items-center gap-1.5 font-bold">
@@ -2086,13 +2130,103 @@
           </div>
         `}
 
-        <!-- Liste des Articles en Stock -->
-        <div class="space-y-2">
-          ${state.stocks.length === 0 ? `
-            <div class="bg-[#1a2a1a] p-6 rounded-2xl border border-[#2d4a2d] text-center text-[#888] text-xs">
-              Aucun article en stock. Cliquez sur <strong>+ Nouvel Article</strong> pour commencer.
+        <!-- ============================================== -->
+        <!-- BLOC DÉDIÉ : STOCK MYCÉLIUM & BLANCS PAR SOUCHE -->
+        <!-- ============================================== -->
+        <div class="bg-[#142214] p-3 rounded-2xl border border-[#4a9e4e]/50 space-y-2.5 mb-3 shadow-lg">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-base">🍄</span>
+                <h3 class="font-bold text-white text-xs tracking-wider uppercase">Stock Mycélium & Blancs par Souche</h3>
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-xs text-[#aaa]">Total disponible :</span>
+                <strong class="text-sm font-bold text-[#7bc67e]">${totalSpawnSacs} sacs</strong>
+                <span class="text-xs text-[#888]">(${totalSpawnKg.toFixed(1)} kg de blanc)</span>
+              </div>
             </div>
-          ` : state.stocks.map(s => {
+            <button onclick="openAddSpawnStrainModal()" class="text-[10px] bg-[#4a9e4e] hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl font-bold shadow transition-all flex items-center gap-1">
+              <span>+</span> <span>Ajouter Souche / Sacs</span>
+            </button>
+          </div>
+
+          <!-- Liste des souches de mycélium -->
+          <div class="space-y-2 pt-1">
+            ${spawnStocks.length === 0 ? `
+              <div class="p-3 bg-[#0f1a0f] rounded-xl border border-dashed border-[#2d4a2d] text-center text-[#888] text-xs">
+                Aucun mycélium en stock. Cliquez sur <strong>+ Ajouter Souche / Sacs</strong> pour approvisionner.
+              </div>
+            ` : spawnStocks.map(s => {
+              const isLow = s.quantity <= s.threshold;
+              const bagWt = s.bagWeightKg || 2.0;
+              const totalKg = (s.quantity * bagWt).toFixed(1);
+              return `
+                <div class="bg-[#0f1a0f] p-2.5 rounded-xl border ${isLow ? 'border-[#5a2a2a] bg-[#2a1a1a]/30' : 'border-[#2d4a2d]'} space-y-2">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span>${isLow ? '🔴' : '🍄'}</span>
+                        <h4 class="font-bold text-white text-xs">${s.strain || s.name}</h4>
+                        <span class="text-[9px] text-[#7bc67e] bg-[#142214] border border-[#2d4a2d] px-1.5 py-0.2 rounded font-semibold">${bagWt} kg/sac</span>
+                        ${isLow ? `<span class="text-[9px] bg-red-950 text-red-300 border border-red-500/40 px-1 py-0.2 rounded font-bold">Alerte stock</span>` : ''}
+                      </div>
+
+                      <div class="flex items-center gap-2 mt-1 flex-wrap text-xs">
+                        <span class="${isLow ? 'text-[#e07a7a] font-bold' : 'text-slate-200'}">
+                          Stock : <strong class="text-white text-sm">${s.quantity} sacs</strong> <span class="text-[#888]">(${totalKg} kg)</span>
+                        </span>
+                        <button onclick="openEditThresholdModal('${s.id}')" class="text-[10px] bg-[#1a2a1a] hover:bg-[#2d4a2d] text-[#aaa] hover:text-white border border-[#2d4a2d] px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <span>Seuil : <strong>${s.threshold} sacs</strong></span>
+                          <span>✏️</span>
+                        </button>
+                      </div>
+
+                      <p class="text-[10px] text-[#888] mt-0.5">
+                        Prix indicatif : <span class="text-[#7bc67e] font-mono">${s.cost || 0} DA / sac</span>
+                      </p>
+                    </div>
+
+                    <div class="flex items-center gap-1">
+                      <button onclick="openEditThresholdModal('${s.id}')" class="text-slate-400 hover:text-[#7bc67e] text-xs p-1" title="Modifier seuil & coût">⚙️</button>
+                      <button onclick="deleteStockItem('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Supprimer">🗑️</button>
+                    </div>
+                  </div>
+
+                  <!-- Actions rapides sur la souche -->
+                  <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-[#2d4a2d]/50">
+                    <button onclick="openStockMvtModal('${s.id}', 'in')" class="py-1 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-lg text-[10px] font-bold">
+                      + Entrée
+                    </button>
+                    <button onclick="openStockMvtModal('${s.id}', 'out')" class="py-1 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/30 rounded-lg text-[10px] font-bold">
+                      - Sortie
+                    </button>
+                    <button onclick="openNewExpenseModal('${s.id}')" class="py-1 bg-[#3a301a] hover:bg-[#4a3e20] text-[#e0b87a] border border-[#e0b87a]/40 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1">
+                      <span>🛒</span> <span>Acheter</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- AUTRES ARTICLES EN STOCK (Paille, Sacs, etc.) -->
+        <!-- ============================================== -->
+        <div class="flex justify-between items-center mb-1.5 px-0.5">
+          <h3 class="text-xs font-bold text-[#888] tracking-wider uppercase">Autres Matières & Consommables (${otherStocks.length})</h3>
+          <button onclick="openNewStockModal()" class="text-[10px] text-[#7bc67e] hover:underline font-bold">
+            + Nouvel article
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          ${otherStocks.length === 0 ? `
+            <div class="bg-[#1a2a1a] p-6 rounded-2xl border border-[#2d4a2d] text-center text-[#888] text-xs">
+              Aucun autre article en stock.
+            </div>
+          ` : otherStocks.map(s => {
             const isLow = s.quantity <= s.threshold;
             return `
               <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isLow ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
@@ -2104,7 +2238,6 @@
                       <span class="text-[9px] text-[#888] bg-[#0f1a0f] border border-[#2d4a2d] px-1.5 py-0.5 rounded font-medium">${s.category || 'Intrant'}</span>
                     </div>
 
-                    <!-- Stock actuel & Seuil limite modifiable d'un clic -->
                     <div class="flex items-center gap-2 mt-1 flex-wrap">
                       <p class="text-[11px] ${isLow ? 'text-[#e07a7a] font-bold' : 'text-slate-300'}">
                         Stock actuel : <strong class="text-sm text-white">${s.quantity} ${s.unit}</strong>
@@ -2125,7 +2258,6 @@
                   </div>
                 </div>
 
-                <!-- Actions directes : Entrée, Sortie, et Réapprovisionnement/Achat -->
                 <div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-[#2d4a2d]/50">
                   <button onclick="openStockMvtModal('${s.id}', 'in')" class="py-1.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-[11px] font-bold">
                     + Entrée
@@ -2142,6 +2274,211 @@
           }).join('')}
         </div>
       `;
+    }
+
+    function openAddSpawnStrainModal() {
+      const strainsList = state.strains || [
+        'Pleurote Gris HK35',
+        'Pleurote Jaune (Cornucopiae)',
+        'Pleurote Blanc Sporesol',
+        'Pleurote Plein Air (Ostreatus)',
+        'Shiitaké (Lentinula edodes)'
+      ];
+
+      const strainOptions = strainsList.map(st => `<option value="${st}">${st}</option>`).join('');
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+          <span>🍄</span> <span>Approvisionner Mycélium / Souche</span>
+        </h3>
+        <p class="text-[10px] text-[#aaa] mb-3">Enregistrez de nouveaux sacs de mycélium par souche dans votre stock.</p>
+
+        <div class="space-y-3 text-xs max-h-[78vh] overflow-y-auto pr-1">
+          <!-- Choix ou saisie de la souche -->
+          <div>
+            <label class="text-[#7bc67e] font-bold block mb-1">Souche de champignon :</label>
+            <select id="spawn-strain-select" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold text-xs" onchange="onModalStrainSelectChange(this.value)">
+              ${strainOptions}
+              <option value="__NEW_STRAIN__">✨ + Ajouter une nouvelle souche (saisie libre)...</option>
+            </select>
+            <div id="spawn-custom-strain-box" class="hidden mt-1.5">
+              <label class="text-[10px] text-[#aaa] block mb-0.5">Nom de la nouvelle souche :</label>
+              <input id="spawn-custom-strain-name" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs font-semibold" placeholder="ex: Pleurote Rose (Pleurotus djamor)" />
+              <p class="text-[9px] text-[#7bc67e] mt-0.5">💡 Cette nouvelle souche sera automatiquement enregistrée dans votre catalogue pour la prochaine fois !</p>
+            </div>
+          </div>
+
+          <!-- Quantité de sacs et poids par sac -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Nombre de sacs</label>
+              <input id="spawn-qty-sacs" type="number" min="0.5" step="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-base" value="5" oninput="updateSpawnTotalCalc()" />
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Poids par sac (kg)</label>
+              <input id="spawn-bag-weight" type="number" min="0.1" step="0.1" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold text-base" value="2.0" oninput="updateSpawnTotalCalc()" />
+              <span class="text-[9px] text-[#888]">Format usuel : 2.0 kg</span>
+            </div>
+          </div>
+
+          <!-- Prix unitaire par sac et seuil -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[#888] block mb-1">Prix d'achat (DA / sac)</label>
+              <input id="spawn-price-per-sac" type="number" step="any" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="1800" oninput="updateSpawnTotalCalc()" />
+            </div>
+            <div>
+              <label class="text-[#888] block mb-1">Seuil alerte (sacs)</label>
+              <input id="spawn-threshold-sacs" type="number" step="1" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" value="2" />
+            </div>
+          </div>
+
+          <!-- Calculateur interactif en direct -->
+          <div id="spawn-calc-box" class="bg-[#142214] p-2.5 rounded-xl border border-[#2d4a2d] space-y-1 text-xs">
+            <div class="flex justify-between text-[#bbb]">
+              <span>Poids total équivalent :</span>
+              <strong id="spawn-calc-total-kg" class="text-white">10.0 kg de blanc</strong>
+            </div>
+            <div class="flex justify-between text-[#bbb]">
+              <span>Montant financier total :</span>
+              <strong id="spawn-calc-total-price" class="text-[#7bc67e] text-sm">9 000 DA</strong>
+            </div>
+          </div>
+
+          <!-- Option Dépense comptable -->
+          <label class="flex items-center gap-2 cursor-pointer p-2 bg-[#0f1a0f] rounded-xl border border-[#2d4a2d]">
+            <input id="spawn-record-expense" type="checkbox" checked class="accent-[#4a9e4e] w-4 h-4" />
+            <span class="text-[11px] text-slate-200">
+              Enregistrer automatiquement cette dépense dans le journal des achats
+            </span>
+          </label>
+
+          <div class="pt-2 flex gap-2">
+            <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
+            <button onclick="saveAddSpawnStrain()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600 transition-all">
+              Valider l'Approvisionnement
+            </button>
+          </div>
+        </div>
+      `);
+      updateSpawnTotalCalc();
+    }
+
+    function onModalStrainSelectChange(val) {
+      const box = document.getElementById('spawn-custom-strain-box');
+      if (box) {
+        if (val === '__NEW_STRAIN__') {
+          box.classList.remove('hidden');
+          const input = document.getElementById('spawn-custom-strain-name');
+          if (input) input.focus();
+        } else {
+          box.classList.add('hidden');
+        }
+      }
+    }
+
+    function updateSpawnTotalCalc() {
+      const qtyEl = document.getElementById('spawn-qty-sacs');
+      const wtEl = document.getElementById('spawn-bag-weight');
+      const priceEl = document.getElementById('spawn-price-per-sac');
+      const kgEl = document.getElementById('spawn-calc-total-kg');
+      const priceOutEl = document.getElementById('spawn-calc-total-price');
+
+      if (!qtyEl || !wtEl || !priceEl || !kgEl || !priceOutEl) return;
+
+      const qty = parseFloat(qtyEl.value) || 0;
+      const wt = parseFloat(wtEl.value) || 0;
+      const price = parseFloat(priceEl.value) || 0;
+
+      const totalKg = (qty * wt).toFixed(1);
+      const totalPrice = Math.round(qty * price);
+
+      kgEl.innerText = `${totalKg} kg de blanc`;
+      priceOutEl.innerText = `${totalPrice.toLocaleString()} DA`;
+    }
+
+    function saveAddSpawnStrain() {
+      const selectVal = document.getElementById('spawn-strain-select').value;
+      let strainName = selectVal;
+      if (selectVal === '__NEW_STRAIN__') {
+        const customInput = document.getElementById('spawn-custom-strain-name');
+        strainName = (customInput ? customInput.value : '').trim();
+        if (!strainName) {
+          alert('Veuillez saisir le nom de la nouvelle souche.');
+          return;
+        }
+        if (!state.strains) state.strains = [];
+        if (!state.strains.includes(strainName)) {
+          state.strains.push(strainName);
+        }
+      }
+
+      const qty = parseFloat(document.getElementById('spawn-qty-sacs').value) || 0;
+      const bagWeight = parseFloat(document.getElementById('spawn-bag-weight').value) || 2.0;
+      const pricePerSac = parseFloat(document.getElementById('spawn-price-per-sac').value) || 0;
+      const threshold = parseFloat(document.getElementById('spawn-threshold-sacs').value) || 2;
+      const recordExpense = document.getElementById('spawn-record-expense') ? document.getElementById('spawn-record-expense').checked : true;
+
+      if (qty <= 0) {
+        alert('Veuillez saisir un nombre de sacs valide (> 0).');
+        return;
+      }
+
+      // Chercher si un stock existe déjà pour cette souche
+      let stockItem = (state.stocks || []).find(s => 
+        (s.strain && s.strain.toLowerCase() === strainName.toLowerCase()) ||
+        (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes(strainName.toLowerCase()))
+      );
+
+      if (stockItem) {
+        stockItem.quantity = Math.round((stockItem.quantity + qty) * 10) / 10;
+        stockItem.bagWeightKg = bagWeight;
+        stockItem.cost = pricePerSac > 0 ? pricePerSac : stockItem.cost;
+        if (threshold > 0) stockItem.threshold = threshold;
+        if (!stockItem.strain) stockItem.strain = strainName;
+      } else {
+        const newId = 'stk_spawn_' + Date.now();
+        stockItem = {
+          id: newId,
+          name: `Mycélium ${strainName}`,
+          strain: strainName,
+          bagWeightKg: bagWeight,
+          category: 'Semence/Blanc',
+          quantity: qty,
+          unit: 'sacs',
+          threshold: threshold,
+          cost: pricePerSac
+        };
+        state.stocks.push(stockItem);
+      }
+
+      // Enregistrement optionnel de la dépense
+      if (recordExpense && pricePerSac > 0) {
+        const totalAmount = Math.round(qty * pricePerSac);
+        const today = new Date();
+        const dateStr = today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        const dateIso = today.toISOString().slice(0, 10);
+
+        if (!state.expenses) state.expenses = [];
+        state.expenses.unshift({
+          id: 'exp_' + Date.now(),
+          label: `Achat Mycélium ${strainName}`,
+          amount: totalAmount,
+          category: 'Matière première (Paille/Blanc)',
+          qty: qty,
+          unit: 'sacs',
+          unitPrice: pricePerSac,
+          supplier: 'Producteur semence',
+          isStockable: true,
+          stockItemId: stockItem.id,
+          date: dateStr,
+          dateIso: dateIso
+        });
+      }
+
+      saveState();
+      closeModal();
+      showToast(`+${qty} sacs de ${strainName} (${(qty * bagWeight).toFixed(1)} kg) ajoutés au stock !`);
     }
 
     function renderExpensesSubViewHtml(totalExpenses) {
@@ -2476,14 +2813,23 @@
     // ==========================================
     // 7. PRODUCTION MYCOLOGIQUE (TABLES, SACS & SEAUX)
     // ==========================================
-    let productionViewMode = 'tables'; // 'tables' | 'containers' | 'table_detail'
+    let productionSubTab = 'weeks'; // 'weeks' | 'archives'
+    let productionViewMode = 'tables'; // 'tables' | 'table_detail'
     let selectedTableId = null;
     let productionContainerFilter = 'all'; // 'all' | 'fruiting' | 'incubation' | 'contaminated' | 'sacs' | 'seaux'
     let bulkSelectedBagIds = new Set();
     let bulkTotalWeightKg = 5.0;
+    let expandedWeekIds = new Set();
 
     // Alias rétro-compatible
     function renderBagsView() {
+      renderProductionView();
+    }
+
+    function setProductionSubTab(tab) {
+      productionSubTab = tab;
+      productionViewMode = 'tables';
+      selectedTableId = null;
       renderProductionView();
     }
 
@@ -2498,28 +2844,71 @@
       renderProductionView();
     }
 
+    function toggleWeekAccordion(weekId) {
+      if (expandedWeekIds.has(weekId)) {
+        expandedWeekIds.delete(weekId);
+      } else {
+        expandedWeekIds.add(weekId);
+      }
+      renderProductionView();
+    }
+
+    function groupTablesByWeek(tables) {
+      const weekMap = new Map();
+      tables.forEach(t => {
+        const wInfo = getWeekInfo(t.date);
+        const wId = t.weekId || wInfo.weekId;
+        const wLabel = t.weekLabel || wInfo.weekLabel;
+
+        if (!weekMap.has(wId)) {
+          weekMap.set(wId, {
+            weekId: wId,
+            weekLabel: wLabel,
+            shortTitle: wInfo.shortTitle,
+            weekNum: wInfo.weekNum,
+            date: t.date,
+            tables: []
+          });
+        }
+        weekMap.get(wId).tables.push(t);
+      });
+
+      return Array.from(weekMap.values()).sort((a, b) => b.weekId.localeCompare(a.weekId));
+    }
+
     function renderProductionView() {
       const container = document.getElementById('app-content');
-      
-      const tables = state.tables || [];
+      const allTables = state.tables || [];
       const bags = state.bags || [];
-      const activeTablesCount = tables.filter(t => t.status === 'Actif').length;
-      const totalContainers = bags.length;
-      const fruitingBags = bags.filter(b => b.status === 'fruiting');
-      const incubationBags = bags.filter(b => b.status === 'incubation');
-      const contaminatedBags = bags.filter(b => b.status === 'contaminated');
-      const totalHarvestedKg = bags.reduce((acc, b) => acc + (b.harvestedKg || 0), 0);
-      const lossRate = totalContainers > 0 ? ((contaminatedBags.length / totalContainers) * 100).toFixed(1) : '0';
+
+      const activeTables = allTables.filter(t => !t.archived && t.status !== 'Archivé');
+      const archivedTables = allTables.filter(t => t.archived === true || t.status === 'Archivé');
+
+      const activeBags = bags.filter(b => {
+        const t = allTables.find(tbl => tbl.id === b.tableId || tbl.id === b.batchId);
+        return t ? (!t.archived && t.status !== 'Archivé') : true;
+      });
+
+      const totalContainers = activeBags.length;
+      const fruitingBags = activeBags.filter(b => b.status === 'fruiting');
+      const incubationBags = activeBags.filter(b => b.status === 'incubation');
+      const contaminatedBags = activeBags.filter(b => b.status === 'contaminated');
+      const totalHarvestedKg = activeBags.reduce((acc, b) => acc + (b.harvestedKg || 0), 0);
+
+      const activeWeeks = groupTablesByWeek(activeTables);
+      if (expandedWeekIds.size === 0 && activeWeeks.length > 0) {
+        expandedWeekIds.add(activeWeeks[0].weekId);
+      }
 
       let html = `
         <div class="space-y-3 pb-6">
-          <!-- Entête & Actions Rapides -->
+          <!-- Entête & Actions Rapides Globales -->
           <div class="flex justify-between items-center">
             <div>
               <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase flex items-center gap-1.5">
                 <span>🍄</span> <span>Production Mycologique</span>
               </h2>
-              <p class="text-[10px] text-[#888]">${tables.length} table(s) • ${totalContainers} contenants (${fruitingBags.length} en fructification)</p>
+              <p class="text-[10px] text-[#888]">${activeTables.length} table(s) active(s) • ${totalContainers} contenants (${fruitingBags.length} en fructification)</p>
             </div>
             <div class="flex items-center gap-1.5">
               <button onclick="openBulkHarvestModal()" class="text-xs bg-[#e0b87a] text-black px-2.5 py-1.5 rounded-xl font-bold shadow hover:bg-amber-400 transition-all flex items-center gap-1">
@@ -2535,7 +2924,7 @@
           <div class="grid grid-cols-4 gap-1.5">
             <div class="bg-[#1a2a1a] p-2 rounded-xl border border-[#2d4a2d] text-center">
               <span class="text-[10px] text-[#888] block">Tables</span>
-              <span class="text-xs font-bold text-white">${activeTablesCount}</span>
+              <span class="text-xs font-bold text-white">${activeTables.length}</span>
             </div>
             <div class="bg-[#1a2a1a] p-2 rounded-xl border border-[#2d4a2d] text-center">
               <span class="text-[10px] text-[#7bc67e] block">Fructif.</span>
@@ -2551,116 +2940,23 @@
             </div>
           </div>
 
-          <!-- Sous-Onglets Navigation Production -->
+          <!-- Sous-Navigation : Semaines vs Archives (Option 'Tous les sacs & seaux' supprimée) -->
           <div class="flex bg-[#0f1a0f] p-1 rounded-xl border border-[#2d4a2d] text-xs">
-            <button onclick="setProductionViewMode('tables')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${productionViewMode === 'tables' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
-              📋 Tables d'ensemencement (${tables.length})
+            <button onclick="setProductionSubTab('weeks')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${productionSubTab === 'weeks' && productionViewMode !== 'table_detail' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
+              📅 Semaines de Production (${activeWeeks.length})
             </button>
-            <button onclick="setProductionViewMode('containers')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${productionViewMode === 'containers' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
-              🛍️ Tous les Sacs & Seaux (${totalContainers})
+            <button onclick="setProductionSubTab('archives')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${productionSubTab === 'archives' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
+              📦 Archives (${archivedTables.length})
             </button>
           </div>
       `;
 
-      if (productionViewMode === 'tables') {
-        // VUE 1 : LISTE DES TABLES
-        if (tables.length === 0) {
-          html += `
-            <div class="text-center py-10 bg-[#1a2a1a] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-3">
-              <span class="text-3xl block">🌾</span>
-              <h3 class="text-sm font-bold text-white">Aucune table d'ensemencement</h3>
-              <p class="text-xs text-[#888] max-w-xs mx-auto">Créez votre première table avec vos bottes de paille et sacs de mycélium.</p>
-              <button onclick="openNewTableModal()" class="px-4 py-2 bg-[#4a9e4e] text-white text-xs font-bold rounded-xl shadow">
-                + Créer une Table
-              </button>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="space-y-3">
-              ${tables.map(table => {
-                const tableBags = bags.filter(b => b.tableId === table.id || b.batchId === table.id);
-                const tableFruit = tableBags.filter(b => b.status === 'fruiting').length;
-                const tableIncub = tableBags.filter(b => b.status === 'incubation').length;
-                const tableContam = tableBags.filter(b => b.status === 'contaminated').length;
-                const tableKg = tableBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
-                const sacsCount = tableBags.filter(b => b.type !== 'seau').length;
-                const seauxCount = tableBags.filter(b => b.type === 'seau').length;
-
-                let daysElapsed = 0;
-                if (table.date) {
-                  const d1 = new Date(table.date);
-                  const d2 = new Date();
-                  daysElapsed = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
-                }
-
-                return `
-                  <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2.5">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${table.id}</span>
-                          <span class="text-xs font-bold text-white">${table.name || ('Table ' + table.id)}</span>
-                        </div>
-                        <p class="text-[11px] text-[#aaa] mt-0.5">${table.strain || 'Pleurote Gris'} • Ensemencée le ${table.date || ''} <span class="text-[#7bc67e] font-semibold">(J+${daysElapsed})</span></p>
-                      </div>
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${table.status === 'Actif' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30' : 'bg-[#2a2a2a] text-[#888]'}">
-                        ${table.status}
-                      </span>
-                    </div>
-
-                    <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs space-y-1">
-                      <div class="flex justify-between text-[#bbb]">
-                        <span class="flex items-center gap-1">🌾 Paille utilisée : <strong class="text-white">${table.strawBottes || 1} botte(s)</strong></span>
-                        <span class="flex items-center gap-1">🍄 Blanc/Mycélium : <strong class="text-white">${table.spawnSacs || 1.5} sac(s)</strong></span>
-                      </div>
-                      <div class="flex justify-between text-[#888] text-[11px] pt-0.5 border-t border-[#2d4a2d]/50">
-                        <span>Contenants : <strong class="text-[#bbb]">${sacsCount} sacs</strong> ${seauxCount > 0 ? `• <strong class="text-[#bbb]">${seauxCount} seaux</strong>` : ''}</span>
-                        <span class="text-emerald-400 font-bold">Total récolté : ${tableKg.toFixed(2)} kg</span>
-                      </div>
-                    </div>
-
-                    <div class="grid grid-cols-4 gap-1 text-center text-[10px]">
-                      <div class="bg-[#1f3a1f]/60 border border-[#7bc67e]/20 p-1.5 rounded-lg text-[#7bc67e]">
-                        <span class="font-bold">${tableFruit}</span>
-                        <span class="block text-[8px] opacity-80">Fructif.</span>
-                      </div>
-                      <div class="bg-[#3a2e1a]/60 border border-[#e0b87a]/20 p-1.5 rounded-lg text-[#e0b87a]">
-                        <span class="font-bold">${tableIncub}</span>
-                        <span class="block text-[8px] opacity-80">Incubat.</span>
-                      </div>
-                      <div class="bg-[#3a1a1a]/60 border border-[#e07a7a]/20 p-1.5 rounded-lg text-[#e07a7a]">
-                        <span class="font-bold">${tableContam}</span>
-                        <span class="block text-[8px] opacity-80">Avarie(s)</span>
-                      </div>
-                      <div class="bg-[#142214] border border-[#2d4a2d] p-1.5 rounded-lg text-white">
-                        <span class="font-bold font-mono">${tableBags.length}</span>
-                        <span class="block text-[8px] opacity-80">Total</span>
-                      </div>
-                    </div>
-
-                    <div class="flex gap-1.5 pt-1">
-                      <button onclick="setProductionViewMode('table_detail', '${table.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold hover:bg-[#254625] transition-all flex items-center justify-center gap-1">
-                        <span>👁️</span> <span>Gérer contenants (${tableBags.length})</span>
-                      </button>
-                      <button onclick="openBulkHarvestModal('${table.id}')" class="px-2.5 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 transition-all flex items-center gap-1" title="Récolte de cette table">
-                        <span>⚖️</span> <span>Récolter</span>
-                      </button>
-                      <button onclick="openPrintLabelsModal('${table.id}')" class="px-2.5 py-1.5 bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] rounded-xl text-xs font-bold hover:text-white hover:border-[#7bc67e] transition-all flex items-center gap-1" title="Imprimer étiquettes thermiques 50x30mm">
-                        <span>🖨️</span> <span>Étiquettes</span>
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `;
-        }
-      } else if (productionViewMode === 'table_detail') {
-        // VUE 2 : DÉTAIL D'UNE TABLE SÉLECTIONNÉE
-        const table = tables.find(t => t.id === selectedTableId) || tables[0];
+      if (productionViewMode === 'table_detail') {
+        // VUE DÉTAIL D'UNE TABLE SÉLECTIONNÉE
+        const table = allTables.find(t => t.id === selectedTableId) || allTables[0];
         if (!table) {
-          return setProductionViewMode('tables');
+          productionViewMode = 'tables';
+          return renderProductionView();
         }
         const tableBags = bags.filter(b => b.tableId === table.id || b.batchId === table.id);
         const sacsCount = tableBags.filter(b => b.type !== 'seau').length;
@@ -2680,7 +2976,7 @@
         html += `
           <div class="space-y-3">
             <button onclick="setProductionViewMode('tables')" class="text-xs text-[#7bc67e] font-bold flex items-center gap-1 hover:underline">
-              <span>←</span> <span>Retour à toutes les tables</span>
+              <span>←</span> <span>Retour aux semaines de production</span>
             </button>
 
             <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2">
@@ -2688,7 +2984,7 @@
                 <div>
                   <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${table.id}</span>
                   <h3 class="font-bold text-white text-sm mt-1">${table.name || ('Table ' + table.id)}</h3>
-                  <p class="text-[11px] text-[#aaa]">Souche : <strong class="text-white">${table.strain || 'Pleurote Gris'}</strong> • Date : ${table.date}</p>
+                  <p class="text-[11px] text-[#aaa]">Souche : <strong class="text-white">${table.strain || 'Pleurote'}</strong> • Date : ${table.date}</p>
                 </div>
                 <div class="text-right">
                   <span class="text-sm font-bold text-emerald-400 block">${tableKg.toFixed(2)} kg</span>
@@ -2711,7 +3007,7 @@
               </div>
             </div>
 
-            <!-- Filtres rapides -->
+            <!-- Filtres rapides contenants -->
             <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs">
               <button onclick="setProductionContainerFilter('all')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'all' ? 'bg-[#2d4a2d] text-white' : 'bg-[#1a2a1a] text-[#888]'}">
                 Tous (${tableBags.length})
@@ -2725,6 +3021,9 @@
               <button onclick="setProductionContainerFilter('contaminated')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'contaminated' ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30' : 'bg-[#1a2a1a] text-[#888]'}">
                 ☣️ Avaries (${tableContam})
               </button>
+              <button onclick="setProductionContainerFilter('seaux')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'seaux' ? 'bg-[#2d4a2d] text-white' : 'bg-[#1a2a1a] text-[#888]'}">
+                🪣 Seaux (${seauxCount})
+              </button>
             </div>
 
             <!-- Liste des Contenants de la Table -->
@@ -2733,212 +3032,550 @@
             </div>
           </div>
         `;
+      } else if (productionSubTab === 'archives') {
+        // VUE ARCHIVES
+        html += renderArchivesViewHtml(archivedTables);
       } else {
-        // VUE 3 : TOUS LES SACS ET SEAUX
-        let displayedBags = [...bags];
-        if (productionContainerFilter === 'fruiting') displayedBags = displayedBags.filter(b => b.status === 'fruiting');
-        else if (productionContainerFilter === 'incubation') displayedBags = displayedBags.filter(b => b.status === 'incubation');
-        else if (productionContainerFilter === 'contaminated') displayedBags = displayedBags.filter(b => b.status === 'contaminated');
-        else if (productionContainerFilter === 'sacs') displayedBags = displayedBags.filter(b => b.type !== 'seau');
-        else if (productionContainerFilter === 'seaux') displayedBags = displayedBags.filter(b => b.type === 'seau');
-
-        html += `
-          <div class="space-y-2.5">
-            <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs">
-              <button onclick="setProductionContainerFilter('all')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'all' ? 'bg-[#2d4a2d] text-white' : 'bg-[#1a2a1a] text-[#888]'}">
-                Tous (${bags.length})
-              </button>
-              <button onclick="setProductionContainerFilter('fruiting')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'fruiting' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30' : 'bg-[#1a2a1a] text-[#888]'}">
-                💧 Fructification (${fruitingBags.length})
-              </button>
-              <button onclick="setProductionContainerFilter('incubation')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'incubation' ? 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/30' : 'bg-[#1a2a1a] text-[#888]'}">
-                🌡️ Incubation (${incubationBags.length})
-              </button>
-              <button onclick="setProductionContainerFilter('contaminated')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'contaminated' ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30' : 'bg-[#1a2a1a] text-[#888]'}">
-                ☣️ Avaries (${contaminatedBags.length})
-              </button>
-              <button onclick="setProductionContainerFilter('seaux')" class="px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap ${productionContainerFilter === 'seaux' ? 'bg-[#2d4a2d] text-white' : 'bg-[#1a2a1a] text-[#888]'}">
-                🪣 Seaux (${bags.filter(b => b.type === 'seau').length})
-              </button>
-            </div>
-
-            <div class="space-y-2">
-              ${displayedBags.length === 0 ? `
-                <div class="text-center py-8 text-xs text-[#888] bg-[#1a2a1a] rounded-2xl border border-[#2d4a2d]">
-                  Aucun contenant correspondant à ce filtre.
-                </div>
-              ` : displayedBags.map(b => {
-                const parentTable = tables.find(t => t.id === b.tableId || t.id === b.batchId);
-                return renderContainerCard(b, parentTable);
-              }).join('')}
-            </div>
-          </div>
-        `;
+        // VUE SEMAINES DE PRODUCTION
+        html += renderWeeksProductionViewHtml(activeWeeks);
       }
 
       html += `</div>`;
       container.innerHTML = html;
     }
 
-    function renderContainerCard(b, parentTable = null) {
-      const isFruit = b.status === 'fruiting';
-      const isContam = b.status === 'contaminated';
-      const isIncub = b.status === 'incubation';
-      const isSeau = b.type === 'seau';
-      const tableName = parentTable ? (parentTable.name || parentTable.id) : (b.tableId || 'Table');
-      const harvests = b.harvests || [];
-      const nextFlush = harvests.length + 1;
-
-      let incubDays = '';
-      if (b.incubationDate) {
-        const d1 = new Date(b.incubationDate);
-        const d2 = new Date();
-        const diff = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
-        incubDays = `J+${diff}`;
+    function renderWeeksProductionViewHtml(activeWeeks) {
+      if (activeWeeks.length === 0) {
+        return `
+          <div class="text-center py-10 bg-[#1a2a1a] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-3">
+            <span class="text-3xl block">🌾</span>
+            <h3 class="text-sm font-bold text-white">Aucune table active</h3>
+            <p class="text-xs text-[#888] max-w-xs mx-auto">Créez votre première table pour lancer la production d'une semaine.</p>
+            <button onclick="openNewTableModal()" class="px-4 py-2 bg-[#4a9e4e] text-white text-xs font-bold rounded-xl shadow">
+              + Créer une Table
+            </button>
+          </div>
+        `;
       }
 
       return `
-        <div class="bg-[#1a2a1a] p-3 rounded-2xl border ${isContam ? 'border-[#5a2a2a] bg-[#2a1a1a]/40' : 'border-[#2d4a2d]'} space-y-2">
-          <div class="flex justify-between items-center">
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-mono font-bold text-white">${b.id}</span>
-              <span class="text-[9px] px-1.5 py-0.5 rounded font-bold ${isSeau ? 'bg-amber-900/60 text-amber-300 border border-amber-500/30' : 'bg-[#0f1a0f] text-[#bbb] border border-[#2d4a2d]'}">
-                ${isSeau ? '🪣 Seau' : '🛍️ Sac'}
-              </span>
-              <span class="text-[10px] text-[#777]">• ${tableName}</span>
-            </div>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              isFruit ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' :
-              (isContam ? 'bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/40' : 'bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40')
-            }">
-              ${isFruit ? `💧 Fructif. (Volée ${nextFlush})` : (isContam ? '☣️ Contaminé' : `🌡️ Incubat. ${incubDays}`)}
-            </span>
-          </div>
+        <div class="space-y-3">
+          ${activeWeeks.map(w => {
+            const isExpanded = expandedWeekIds.has(w.weekId);
+            const weekBags = (state.bags || []).filter(b => w.tables.some(t => t.id === b.tableId || t.id === b.batchId));
+            const weekKg = weekBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
 
-          <div class="flex justify-between items-center text-xs text-[#aaa] bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d]">
-            <span>Substrat : <strong class="text-white">${b.weight || 4.5} kg</strong></span>
-            <span>Total récolté : <strong class="text-emerald-400 text-sm font-bold">${(b.harvestedKg || 0).toFixed(2)} kg</strong></span>
-          </div>
+            return `
+              <div class="bg-[#142214] rounded-2xl border ${isExpanded ? 'border-[#4a9e4e]/50' : 'border-[#2d4a2d]'} overflow-hidden transition-all shadow-md">
+                <!-- Entête de Semaine (Accordéon cliquable) -->
+                <div class="p-3 bg-[#1a2a1a] flex justify-between items-center cursor-pointer select-none hover:bg-[#1f331f] transition-all" onclick="toggleWeekAccordion('${w.weekId}')">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-lg">${isExpanded ? '📂' : '📁'}</span>
+                    <div>
+                      <h3 class="text-xs font-bold text-white">${w.weekLabel}</h3>
+                      <p class="text-[10px] text-[#888] mt-0.5">
+                        <strong class="text-slate-300">${w.tables.length} table(s)</strong> • <strong class="text-[#bbb]">${weekBags.length} sacs & seaux</strong> • <span class="text-emerald-400 font-bold">${weekKg.toFixed(1)} kg récolté</span>
+                      </p>
+                    </div>
+                  </div>
 
-          ${harvests.length > 0 ? `
-            <div class="flex flex-wrap gap-1 pt-0.5">
-              ${harvests.map(h => `
-                <span class="bg-[#1f3a1f] border border-[#2d4a2d] text-[#7bc67e] text-[9px] px-1.5 py-0.5 rounded-md font-semibold">
-                  Volée ${h.flush} : ${h.weightKg} kg <span class="text-[#777]">(${h.date ? h.date.slice(5) : ''})</span>
-                </span>
-              `).join('')}
-            </div>
-          ` : ''}
+                  <!-- Actions au niveau de la Semaine -->
+                  <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
+                    <button onclick="openNewTableModal(null, '${w.tables[0]?.date || ''}')" class="px-2 py-1 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/30 rounded-lg text-[10px] font-bold flex items-center gap-0.5" title="Créer une table rattachée à cette semaine">
+                      <span>+</span> <span>Table</span>
+                    </button>
+                    <button onclick="archiveWeek('${w.weekId}')" class="p-1.5 bg-[#0f1a0f] hover:bg-[#1f2f1f] text-slate-300 hover:text-sky-300 border border-[#2d4a2d] rounded-lg text-xs" title="Archiver toute cette semaine">
+                      📦
+                    </button>
+                    <button onclick="openDeleteWeekModal('${w.weekId}')" class="p-1.5 bg-[#0f1a0f] hover:bg-[#2f1f1f] text-slate-400 hover:text-red-400 border border-[#2d4a2d] rounded-lg text-xs" title="Supprimer toute la semaine (Option A)">
+                      🗑️
+                    </button>
+                    <span class="text-xs text-slate-400 ml-1 font-bold">${isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </div>
 
-          ${isContam ? `
-            <div class="bg-[#3a1a1a]/40 border border-[#e07a7a]/30 p-2 rounded-xl text-[10px] text-[#e07a7a] flex items-center justify-between">
-              <span>⚠️ Écarté pour : <strong>${b.contaminationReason || 'Contamination'}</strong></span>
-              <span>${b.contaminationDate || ''}</span>
-            </div>
-          ` : ''}
-
-          ${!isContam ? `
-            <div class="flex gap-1.5 pt-1">
-              ${isIncub ? `
-                <button onclick="moveToFruiting('${b.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold hover:bg-[#254625] transition-all flex items-center justify-center gap-1">
-                  <span>💧</span> <span>Passer en Fructification</span>
-                </button>
-              ` : `
-                <button onclick="openSingleBagHarvestModal('${b.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl text-xs font-bold shadow hover:bg-emerald-600 transition-all flex items-center justify-center gap-1">
-                  <span>⚖️</span> <span>Peser Volée ${nextFlush}</span>
-                </button>
-              `}
-              <button onclick="openContaminationModal('${b.id}')" class="px-2.5 py-1.5 bg-[#3a1a1a] text-[#e07a7a] border border-[#e07a7a]/30 rounded-xl text-xs font-bold hover:bg-[#4a1f1f] transition-all" title="Déclarer une avarie ou moisissure">
-                ☣️ Avarie
-              </button>
-              <button onclick="openPrintLabelsModal(null, '${b.id}')" class="px-2 py-1.5 bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] rounded-xl text-xs font-bold hover:text-white" title="Étiquette thermique 50x30mm">
-                🖨️
-              </button>
-            </div>
-          ` : `
-            <div class="flex justify-end pt-0.5">
-              <button onclick="restoreBag('${b.id}')" class="text-[10px] text-[#888] hover:text-[#bbb] underline">
-                Rétablir ce contenant en culture
-              </button>
-            </div>
-          `}
+                <!-- Contenu déployé : Tables de cette semaine -->
+                ${isExpanded ? `
+                  <div class="p-2.5 space-y-2.5 border-t border-[#2d4a2d]/50">
+                    ${w.tables.map(table => renderTableCard(table)).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
         </div>
       `;
     }
 
-    function openNewTableModal() {
-      const strawStock = state.stocks.find(s => s.id === 'stk_01' || s.unit === 'bottes' || s.name.toLowerCase().includes('paille'));
-      const spawnStock = state.stocks.find(s => s.id === 'stk_02' || (s.unit === 'sacs' && s.category.includes('Blanc')) || s.name.toLowerCase().includes('blanc') || s.name.toLowerCase().includes('mycélium'));
+    function renderTableCard(table) {
+      const tableBags = (state.bags || []).filter(b => b.tableId === table.id || b.batchId === table.id);
+      const sacsCount = tableBags.filter(b => b.type !== 'seau').length;
+      const seauxCount = tableBags.filter(b => b.type === 'seau').length;
+      const tableFruit = tableBags.filter(b => b.status === 'fruiting').length;
+      const tableIncub = tableBags.filter(b => b.status === 'incubation').length;
+      const tableContam = tableBags.filter(b => b.status === 'contaminated').length;
+      const tableKg = tableBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
 
-      const nextTableNum = (state.tables || []).length + 1;
-      const defaultCode = `TAB-0${nextTableNum}`;
-      const defaultName = `Table Inox ${nextTableNum} - Pleurote Gris`;
+      let daysElapsed = 0;
+      if (table.date) {
+        const d1 = new Date(table.date);
+        const d2 = new Date();
+        daysElapsed = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
+      }
+
+      return `
+        <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-2.5">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded-md font-mono">${table.id}</span>
+                <h4 class="text-xs font-bold text-white">${table.name || ('Table ' + table.id)}</h4>
+              </div>
+              <p class="text-[11px] text-[#aaa] mt-0.5">
+                <strong class="text-[#7bc67e]">${table.strain || 'Pleurote Gris'}</strong> • Ensemencée le ${table.date || ''} 
+                <span class="text-slate-400 font-semibold">(J+${daysElapsed})</span>
+              </p>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${table.status === 'Actif' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30' : 'bg-[#2a2a2a] text-[#888]'}">
+                ${table.status}
+              </span>
+            </div>
+          </div>
+
+          <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs space-y-1">
+            <div class="flex justify-between text-[#bbb]">
+              <span>🌾 Paille : <strong class="text-white">${table.strawBottes || 1} botte(s)</strong></span>
+              <span>🍄 Blanc : <strong class="text-white">${table.spawnSacs || 1.5} sac(s)</strong></span>
+            </div>
+            <div class="flex justify-between text-[#888] text-[11px] pt-0.5 border-t border-[#2d4a2d]/50">
+              <span>Contenants : <strong class="text-[#bbb]">${sacsCount} sacs</strong> ${seauxCount > 0 ? `• <strong class="text-[#bbb]">${seauxCount} seaux</strong>` : ''}</span>
+              <span class="text-emerald-400 font-bold">Total récolté : ${tableKg.toFixed(2)} kg</span>
+            </div>
+          </div>
+
+          <!-- Compteurs statut contenants -->
+          <div class="grid grid-cols-4 gap-1 text-center text-[10px]">
+            <div class="bg-[#1f3a1f]/60 border border-[#7bc67e]/20 p-1 rounded-lg text-[#7bc67e]">
+              <span class="font-bold">${tableFruit}</span>
+              <span class="block text-[8px] opacity-80">Fructif.</span>
+            </div>
+            <div class="bg-[#3a2e1a]/60 border border-[#e0b87a]/20 p-1 rounded-lg text-[#e0b87a]">
+              <span class="font-bold">${tableIncub}</span>
+              <span class="block text-[8px] opacity-80">Incubat.</span>
+            </div>
+            <div class="bg-[#3a1a1a]/60 border border-[#e07a7a]/20 p-1 rounded-lg text-[#e07a7a]">
+              <span class="font-bold">${tableContam}</span>
+              <span class="block text-[8px] opacity-80">Avarie(s)</span>
+            </div>
+            <div class="bg-[#142214] border border-[#2d4a2d] p-1 rounded-lg text-white">
+              <span class="font-bold font-mono">${tableBags.length}</span>
+              <span class="block text-[8px] opacity-80">Total</span>
+            </div>
+          </div>
+
+          <!-- Boutons d'action -->
+          <div class="flex gap-1.5 pt-1 flex-wrap">
+            <button onclick="setProductionViewMode('table_detail', '${table.id}')" class="flex-1 min-w-[110px] py-1.5 bg-[#1f3a1f] hover:bg-[#254625] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1">
+              <span>👁️</span> <span>Gérer sacs (${tableBags.length})</span>
+            </button>
+            <button onclick="openBulkHarvestModal('${table.id}')" class="px-2.5 py-1.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition-all flex items-center gap-1" title="Peser récolte sur cette table">
+              <span>⚖️</span> <span>Récolter</span>
+            </button>
+            <button onclick="openPrintLabelsModal('${table.id}')" class="px-2 py-1.5 bg-[#0f1a0f] hover:text-white hover:border-[#7bc67e] text-slate-300 border border-[#2d4a2d] rounded-xl text-xs font-bold transition-all" title="Imprimer étiquettes">
+              <span>🖨️</span>
+            </button>
+            <button onclick="archiveTable('${table.id}')" class="px-2 py-1.5 bg-[#1a2233] hover:bg-[#22334d] text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold transition-all" title="Archiver la table">
+              <span>📦</span>
+            </button>
+            <button onclick="openDeleteTableModal('${table.id}')" class="px-2 py-1.5 bg-[#2a1a1a] hover:bg-[#3a1f1f] text-red-400 border border-red-500/30 rounded-xl text-xs font-bold transition-all" title="Supprimer la table (Option A)">
+              <span>🗑️</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderArchivesViewHtml(archivedTables) {
+      if (archivedTables.length === 0) {
+        return `
+          <div class="text-center py-10 bg-[#1a2a1a] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-2">
+            <span class="text-3xl block">📦</span>
+            <h3 class="text-sm font-bold text-white">Aucune table archivée</h3>
+            <p class="text-xs text-[#888] max-w-xs mx-auto">Lorsque vous avez terminé les 3 volées d'une table, archivez-la pour garder votre écran propre tout en préservant vos chiffres.</p>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="space-y-2.5">
+          <div class="p-2 bg-[#142214] border border-[#2d4a2d] rounded-xl flex items-center justify-between text-xs text-[#aaa]">
+            <span>📦 Tables conservées dans l'historique (${archivedTables.length})</span>
+            <span class="text-[10px] text-[#7bc67e]">Statistiques et récoltes préservées</span>
+          </div>
+
+          ${archivedTables.map(table => {
+            const tableBags = (state.bags || []).filter(b => b.tableId === table.id || b.batchId === table.id);
+            const tableKg = tableBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
+
+            return `
+              <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-2 opacity-90 hover:opacity-100 transition-all">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] font-bold text-[#888] bg-[#0f1a0f] border border-[#2d4a2d] px-2 py-0.5 rounded font-mono">${table.id}</span>
+                      <h4 class="text-xs font-bold text-white">${table.name || table.id}</h4>
+                    </div>
+                    <p class="text-[10px] text-[#888] mt-0.5">
+                      ${table.strain} • Semaine : ${table.weekLabel || table.weekId || ''} • Date : ${table.date}
+                    </p>
+                  </div>
+                  <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-semibold border border-slate-700">
+                    📦 Archivé
+                  </span>
+                </div>
+
+                <div class="bg-[#0f1a0f] p-2 rounded-xl border border-[#2d4a2d] flex justify-between text-xs text-[#bbb]">
+                  <span>${tableBags.length} contenants générés</span>
+                  <span class="text-emerald-400 font-bold">Total récolté : ${tableKg.toFixed(2)} kg</span>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                  <button onclick="unarchiveTable('${table.id}')" class="flex-1 py-1.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                    <span>🔄</span> <span>Rétablir en production active</span>
+                  </button>
+                  <button onclick="openDeleteTableModal('${table.id}')" class="px-3 py-1.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-red-400 border border-red-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1" title="Supprimer définitivement">
+                    <span>🗑️</span> <span>Supprimer</span>
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function archiveTable(tableId) {
+      const table = (state.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+
+      table.archived = true;
+      table.status = 'Archivé';
+      saveState();
+      closeModal();
+      showToast(`📦 Table ${table.id} archivée ! Retrouvez-la dans l'onglet Archives.`);
+    }
+
+    function unarchiveTable(tableId) {
+      const table = (state.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+
+      table.archived = false;
+      table.status = 'Actif';
+      saveState();
+      showToast(`🔄 Table ${table.id} rétablie en production active !`);
+    }
+
+    function archiveWeek(weekId) {
+      const weekTables = (state.tables || []).filter(t => (t.weekId === weekId || getWeekInfo(t.date).weekId === weekId) && !t.archived);
+      if (weekTables.length === 0) return;
+
+      if (confirm(`Archiver les ${weekTables.length} table(s) de cette semaine ?\nToutes les récoltes et statistiques seront préservées dans les archives.`)) {
+        weekTables.forEach(t => {
+          t.archived = true;
+          t.status = 'Archivé';
+        });
+        saveState();
+        showToast(`📦 Semaine archivée (${weekTables.length} tables déplacées dans les archives) !`);
+      }
+    }
+
+    function openDeleteTableModal(tableId) {
+      const table = (state.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+
+      const tableBags = (state.bags || []).filter(b => b.tableId === table.id || b.batchId === table.id);
+      const tableKg = tableBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
+
+      const strawBottes = table.strawBottes || 1.0;
+      const spawnSacs = table.spawnSacs || 1.5;
+      const strainName = table.strain || 'Pleurote';
 
       showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between items-center border-b border-[#2d4a2d] pb-2">
+            <h3 class="text-sm font-bold text-white flex items-center gap-1.5 text-red-400">
+              <span>🗑️</span> <span>Suppression Table : ${table.id}</span>
+            </h3>
+            <span class="text-[10px] font-mono text-[#888]">${table.name}</span>
+          </div>
+
+          ${tableKg > 0 ? `
+            <div class="p-2.5 bg-amber-950/70 border border-amber-500/80 rounded-xl text-amber-200 space-y-1">
+              <p class="font-bold flex items-center gap-1 text-xs">
+                <span>⚠️</span> <span>ATTENTION : RÉCOLTES DÉJÀ ENREGISTRÉES</span>
+              </p>
+              <p class="text-[11px] leading-relaxed">
+                Cette table a déjà produit <strong>${tableKg.toFixed(2)} kg</strong> de récoltes vendables.
+                La supprimer détruira l'historique de ces cueillettes.
+              </p>
+              <p class="text-[10px] text-amber-300/90 font-semibold">
+                👉 Si vous voulez juste désencombrer l'écran, utilisez plutôt <strong>📦 Archiver</strong> !
+              </p>
+            </div>
+          ` : ''}
+
+          <div class="bg-[#0f1a0f] p-3 rounded-2xl border border-[#2d4a2d] space-y-1.5">
+            <p class="text-white font-bold text-xs">Matières consommées lors de l'ensemencement :</p>
+            <div class="flex justify-between text-[#bbb]">
+              <span>🌾 Paille de blé :</span>
+              <strong class="text-white">${strawBottes} botte(s)</strong>
+            </div>
+            <div class="flex justify-between text-[#bbb]">
+              <span>🍄 Mycélium / Blanc (${strainName}) :</span>
+              <strong class="text-white">${spawnSacs} sac(s)</strong>
+            </div>
+            <div class="flex justify-between text-[#888] text-[10px] pt-1 border-t border-[#2d4a2d]/50">
+              <span>Contenants associés qui seront supprimés :</span>
+              <strong class="text-[#bbb]">${tableBags.length} sacs & seaux</strong>
+            </div>
+          </div>
+
+          <div class="bg-[#142214] p-3 rounded-2xl border border-[#4a9e4e]/40 space-y-2">
+            <p class="font-bold text-[#7bc67e] text-xs">
+              Voulez-vous réintégrer ces matières premières au stock ? (Option A)
+            </p>
+            <p class="text-[10px] text-[#aaa] leading-relaxed">
+              Si la table a été créée par erreur ou annulée avant incubation, choisissez de restituer au stock.
+              Si les matières ont été gaspillées ou contaminées, choisissez perte réelle.
+            </p>
+          </div>
+
+          <div class="space-y-2 pt-1">
+            <button onclick="executeDeleteTable('${tableId}', true)" class="w-full py-2.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/60 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow">
+              <span>✅</span> <span>Oui, réintégrer au stock (+${strawBottes} bottes, +${spawnSacs} sacs blanc)</span>
+            </button>
+
+            <button onclick="executeDeleteTable('${tableId}', false)" class="w-full py-2.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+              <span>❌</span> <span>Non, considérer comme perte réelle (0 restitution)</span>
+            </button>
+
+            <button onclick="archiveTable('${tableId}')" class="w-full py-2 bg-[#1a2233] hover:bg-[#25324d] text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+              <span>📦</span> <span>Préférer archiver la table (Garder stats & historique)</span>
+            </button>
+
+            <button onclick="closeModal()" class="w-full py-2 bg-[#2d4a2d] text-white rounded-xl text-xs font-semibold">
+              Annuler
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function executeDeleteTable(tableId, restoreStock) {
+      const table = (state.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+
+      const strawBottes = table.strawBottes || 1.0;
+      const spawnSacs = table.spawnSacs || 1.5;
+      const strainName = table.strain || 'Pleurote';
+      let restMsg = '';
+
+      if (restoreStock) {
+        const strawStock = state.stocks.find(s => s.id === 'stk_01' || s.unit === 'bottes' || s.name.toLowerCase().includes('paille'));
+        if (strawStock) {
+          strawStock.quantity = Math.round((strawStock.quantity + strawBottes) * 10) / 10;
+        }
+
+        const spawnStock = (table.spawnStockId ? state.stocks.find(s => s.id === table.spawnStockId) : null) ||
+                           state.stocks.find(s => (s.strain && s.strain.toLowerCase() === strainName.toLowerCase()) || (s.category === 'Semence/Blanc' && s.name.toLowerCase().includes(strainName.toLowerCase())));
+        if (spawnStock) {
+          spawnStock.quantity = Math.round((spawnStock.quantity + spawnSacs) * 10) / 10;
+        }
+
+        restMsg = ` • Restitué au stock : +${strawBottes} botte(s) et +${spawnSacs} sac(s) [${strainName}]`;
+      }
+
+      state.bags = (state.bags || []).filter(b => b.tableId !== tableId && b.batchId !== tableId);
+      state.tables = (state.tables || []).filter(t => t.id !== tableId);
+      if (state.batches) state.batches = state.batches.filter(b => b.id !== tableId);
+
+      saveState();
+      closeModal();
+      showToast(`Table ${tableId} supprimée !${restMsg}`);
+    }
+
+    function openDeleteWeekModal(weekId) {
+      const weekTables = (state.tables || []).filter(t => (t.weekId === weekId || getWeekInfo(t.date).weekId === weekId));
+      if (weekTables.length === 0) return;
+
+      const totalStraw = weekTables.reduce((sum, t) => sum + (t.strawBottes || 1), 0);
+      const totalSpawn = weekTables.reduce((sum, t) => sum + (t.spawnSacs || 1.5), 0);
+      const wInfo = getWeekInfo(weekTables[0]?.date);
+
+      showModal(`
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between items-center border-b border-[#2d4a2d] pb-2">
+            <h3 class="text-sm font-bold text-white flex items-center gap-1.5 text-red-400">
+              <span>🗑️</span> <span>Supprimer toute la Semaine</span>
+            </h3>
+            <span class="text-[10px] font-mono text-[#888]">${weekId}</span>
+          </div>
+
+          <div class="bg-[#0f1a0f] p-3 rounded-2xl border border-[#2d4a2d] space-y-1.5">
+            <p class="text-white font-bold text-xs">${wInfo.weekLabel}</p>
+            <p class="text-[#bbb]">Cette action supprimera les <strong>${weekTables.length} table(s)</strong> suivantes :</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-[#aaa]">
+              ${weekTables.map(t => `<li><strong>${t.id}</strong> : ${t.name} (${t.strain})</li>`).join('')}
+            </ul>
+            <div class="pt-1.5 border-t border-[#2d4a2d]/50 flex justify-between text-[#888] text-[10px]">
+              <span>Matières totales consommées :</span>
+              <span class="text-white font-semibold">${totalStraw} bottes • ${totalSpawn} sacs mycélium</span>
+            </div>
+          </div>
+
+          <div class="bg-[#142214] p-3 rounded-2xl border border-[#4a9e4e]/40 space-y-2">
+            <p class="font-bold text-[#7bc67e] text-xs">
+              Voulez-vous réintégrer les matières de ces ${weekTables.length} tables au stock ?
+            </p>
+          </div>
+
+          <div class="space-y-2 pt-1">
+            <button onclick="executeDeleteWeek('${weekId}', true)" class="w-full py-2.5 bg-[#1f3a1f] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/60 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow">
+              <span>✅</span> <span>Oui, réintégrer au stock (+${totalStraw} bottes, +${totalSpawn} sacs)</span>
+            </button>
+            <button onclick="executeDeleteWeek('${weekId}', false)" class="w-full py-2.5 bg-[#2a1a1a] hover:bg-[#3a2020] text-[#e07a7a] border border-[#e07a7a]/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+              <span>❌</span> <span>Non, perte réelle (0 restitution)</span>
+            </button>
+            <button onclick="archiveWeek('${weekId}')" class="w-full py-2 bg-[#1a2233] hover:bg-[#25324d] text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+              <span>📦</span> <span>Préférer archiver la semaine</span>
+            </button>
+            <button onclick="closeModal()" class="w-full py-2 bg-[#2d4a2d] text-white rounded-xl text-xs font-semibold">
+              Annuler
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function executeDeleteWeek(weekId, restoreStock) {
+      const weekTables = (state.tables || []).filter(t => (t.weekId === weekId || getWeekInfo(t.date).weekId === weekId));
+      if (weekTables.length === 0) return;
+
+      weekTables.forEach(t => {
+        executeDeleteTable(t.id, restoreStock);
+      });
+
+      closeModal();
+      showToast(`Semaine ${weekId} et toutes ses tables supprimées !`);
+    }
+
+    function openNewTableModal(defaultCode = null, suggestedDate = null) {
+      const strawStock = state.stocks.find(s => s.id === 'stk_01' || s.unit === 'bottes' || s.name.toLowerCase().includes('paille'));
+      const strawAvail = strawStock ? strawStock.quantity : 0;
+
+      const spawnStocks = state.stocks.filter(s => (s.category === 'Semence/Blanc' || (s.unit === 'sacs' && s.strain)));
+      const availableSpawnStocks = spawnStocks.filter(s => s.quantity > 0);
+
+      const nextTableNum = (state.tables || []).length + 1;
+      const code = defaultCode || `TAB-0${nextTableNum}`;
+      const defaultDate = suggestedDate || new Date().toISOString().slice(0, 10);
+      const weekInfo = getWeekInfo(defaultDate);
+
+      let strainOptionsHtml = '';
+      if (availableSpawnStocks.length > 0) {
+        strainOptionsHtml = availableSpawnStocks.map((s, idx) => {
+          const bagWt = s.bagWeightKg || 2.0;
+          const totalKg = (s.quantity * bagWt).toFixed(1);
+          return `<option value="${s.id}" ${idx === 0 ? 'selected' : ''}>${s.strain || s.name} — Dispo: ${s.quantity} sacs (${totalKg} kg)</option>`;
+        }).join('');
+      } else {
+        strainOptionsHtml = `<option value="">⚠️ Aucun mycélium disponible en stock</option>`;
+      }
+
+      showModal(`
+        <h3 class="text-sm font-bold text-white mb-1 flex items-center justify-between">
           <span class="flex items-center gap-1.5">
             <span>🍄</span> <span>Nouvelle Table d'Ensemencement</span>
           </span>
-          <span class="text-[10px] text-[#7bc67e] font-mono">${defaultCode}</span>
+          <span class="text-[10px] text-[#7bc67e] font-mono">${code}</span>
         </h3>
 
-        <div class="space-y-2.5 text-xs max-h-[78vh] overflow-y-auto pr-1">
+        <!-- Indicateur de semaine automatique -->
+        <div id="table-modal-week-badge" class="mb-2 p-1.5 bg-[#142214] border border-[#2d4a2d] rounded-xl flex items-center justify-between text-[11px] text-[#7bc67e]">
+          <span class="flex items-center gap-1">
+            <span>📅</span> <span id="table-modal-week-label">${weekInfo.weekLabel}</span>
+          </span>
+          <span class="text-[9px] bg-[#2d4a2d] text-white px-1.5 py-0.2 rounded font-mono font-bold">Auto-Cohorte</span>
+        </div>
+
+        <div class="space-y-2.5 text-xs max-h-[75vh] overflow-y-auto pr-1">
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[#888] block mb-1">Code Table</label>
-              <input id="table-code" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono font-bold" value="${defaultCode}">
+              <input id="table-code" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono font-bold" value="${code}">
             </div>
             <div>
               <label class="text-[#888] block mb-1">Date d'ensemencement</label>
-              <input id="table-date" type="date" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${new Date().toISOString().slice(0, 10)}">
+              <input id="table-date" type="date" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" value="${defaultDate}" onchange="onTableDateModalChange(this.value)">
             </div>
           </div>
 
           <div>
             <label class="text-[#888] block mb-1">Nom / Description de la Table</label>
-            <input id="table-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold" value="${defaultName}">
+            <input id="table-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold" value="Table Inox ${nextTableNum}">
           </div>
 
+          <!-- Choix obligatoire d'une souche disponible en stock -->
           <div>
-            <label class="text-[#888] block mb-1">Souche de champignon</label>
-            <select id="table-strain" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold">
-              <option value="Pleurote Gris HK35" selected>Pleurote Gris HK35 (Standard)</option>
-              <option value="Pleurote Jaune (Cornucopiae)">Pleurote Jaune (Pleurotus cornucopiae)</option>
-              <option value="Pleurote Rose (Djamor)">Pleurote Rose (Pleurotus djamor)</option>
-              <option value="Pleurote Plein Air (Ostreatus)">Pleurote Plein Air (Ostreatus)</option>
-              <option value="Shiitaké (Lentinula edodes)">Shiitaké (Lentinula edodes)</option>
+            <label class="text-[#7bc67e] font-bold block mb-1 flex items-center justify-between">
+              <span>Souche de mycélium (Disponible en stock) :</span>
+              <button onclick="openAddSpawnStrainModal()" type="button" class="text-[10px] text-[#7bc67e] hover:underline font-bold">+ Approvisionner souche</button>
+            </label>
+            <select id="table-spawn-stock-id" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold text-xs" onchange="onTableSpawnStockChange(this.value)">
+              ${strainOptionsHtml}
             </select>
+            ${availableSpawnStocks.length === 0 ? `
+              <p class="text-[10px] text-[#e07a7a] mt-1 bg-[#2a1a1a] p-1.5 rounded-lg border border-[#5a2a2a]">
+                ⛔ Aucun sac de mycélium en stock ! Vous devez d'abord approvisionner une souche via le bouton ci-dessus.
+              </p>
+            ` : ''}
           </div>
 
-          <!-- Section Matières Premières & Déduction Stock -->
+          <!-- Section Déduction Matières Premières & Blocage Strict -->
           <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2">
             <label class="text-[#7bc67e] font-bold block flex items-center justify-between">
-              <span>🌾 Matières Premières (Déduction Auto Stock)</span>
-              <span class="text-[9px] bg-[#2d4a2d] text-white px-2 py-0.5 rounded-full">Automatique</span>
+              <span>🌾 Matières Premières (Déduction & Blocage Strict)</span>
+              <span class="text-[9px] bg-red-950 text-red-300 border border-red-500/40 px-1.5 py-0.2 rounded-full font-bold">Contrôle strict</span>
             </label>
 
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[#aaa] block text-[11px] mb-0.5">Paille pasteurisée :</label>
                 <div class="relative">
-                  <input id="table-straw-bottes" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.0">
+                  <input id="table-straw-bottes" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.0" oninput="checkTableStockLive()">
                   <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">bottes</span>
                 </div>
-                <span class="text-[9px] text-[#888] block mt-0.5">En stock : <strong class="text-white">${strawStock ? strawStock.quantity : 0} bottes</strong></span>
+                <span id="table-straw-avail-text" class="text-[9px] text-[#888] block mt-0.5">
+                  En stock : <strong class="${strawAvail < 1 ? 'text-[#e07a7a]' : 'text-white'}">${strawAvail} bottes</strong>
+                </span>
               </div>
 
               <div>
-                <label class="text-[#aaa] block text-[11px] mb-0.5">Mycélium / Blanc (2kg) :</label>
+                <label class="text-[#aaa] block text-[11px] mb-0.5">Mycélium / Blanc :</label>
                 <div class="relative">
-                  <input id="table-spawn-sacs" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.5">
+                  <input id="table-spawn-sacs" type="number" step="0.5" min="0.5" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="1.5" oninput="checkTableStockLive()">
                   <span class="absolute right-2 top-2 text-[#7bc67e] text-xs font-semibold">sacs</span>
                 </div>
-                <span class="text-[9px] text-[#888] block mt-0.5">En stock : <strong class="text-white">${spawnStock ? spawnStock.quantity : 0} sacs</strong></span>
+                <span id="table-spawn-avail-text" class="text-[9px] text-[#888] block mt-0.5">
+                  <!-- Actualisé en temps réel -->
+                </span>
               </div>
             </div>
-            <p class="text-[10px] text-[#7bc67e] bg-[#0f1a0f] p-1.5 rounded-lg border border-[#2d4a2d]">
-              💡 À la validation, votre stock sera déduit de <strong class="text-white">1 botte de paille</strong> et <strong class="text-white">1.5 sac de blanc</strong>.
-            </p>
+
+            <!-- Message d'alerte direct si stock insuffisant -->
+            <div id="table-stock-alert-msg" class="hidden p-2 bg-[#2a1a1a] border border-[#5a2a2a] rounded-xl text-[10px] text-[#e07a7a] font-bold">
+            </div>
           </div>
 
           <!-- Section Contenants Générés -->
@@ -2951,12 +3588,10 @@
               <div>
                 <label class="text-[#aaa] block text-[11px] mb-0.5">🛍️ Nombre de Sacs :</label>
                 <input id="table-sacs-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="14">
-                <span class="text-[9px] text-[#888] block mt-0.5">Ex: ${defaultCode.replace(/[^A-Za-z0-9]/g, '')}-S01...</span>
               </div>
               <div>
                 <label class="text-[#aaa] block text-[11px] mb-0.5">🪣 Nombre de Seaux :</label>
                 <input id="table-seaux-count" type="number" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-bold" value="2">
-                <span class="text-[9px] text-[#888] block mt-0.5">Ex: ${defaultCode.replace(/[^A-Za-z0-9]/g, '')}-B01...</span>
               </div>
             </div>
 
@@ -2968,24 +3603,81 @@
 
           <div>
             <label class="text-[#888] block mb-1">Notes / Emplacement (optionnel)</label>
-            <input id="table-notes" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white text-xs" placeholder="Ex: Table inox principale, ensemencée à 22°C...">
+            <input id="table-notes" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white text-xs" placeholder="Ex: Table inox principale...">
           </div>
 
           <div class="pt-2 flex gap-2">
             <button onclick="closeModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Annuler</button>
-            <button onclick="saveNewTable()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600 transition-all">
+            <button onclick="saveNewTable()" id="btn-submit-table" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600 transition-all">
               Créer la Table & Déduire Stock
             </button>
           </div>
         </div>
       `);
+
+      onTableSpawnStockChange(document.getElementById('table-spawn-stock-id')?.value);
+    }
+
+    function onTableDateModalChange(dateVal) {
+      const wInfo = getWeekInfo(dateVal);
+      const labelEl = document.getElementById('table-modal-week-label');
+      if (labelEl) labelEl.innerText = wInfo.weekLabel;
+    }
+
+    function onTableSpawnStockChange(stockId) {
+      const textEl = document.getElementById('table-spawn-avail-text');
+      if (!textEl) return;
+
+      const s = state.stocks.find(x => x.id === stockId);
+      if (s) {
+        const bagWt = s.bagWeightKg || 2.0;
+        textEl.innerHTML = `En stock : <strong class="${s.quantity < 1.5 ? 'text-[#e07a7a]' : 'text-white'}">${s.quantity} sacs</strong> (${(s.quantity * bagWt).toFixed(1)} kg)`;
+      } else {
+        textEl.innerHTML = `<span class="text-[#e07a7a] font-bold">0 sac disponible</span>`;
+      }
+      checkTableStockLive();
+    }
+
+    function checkTableStockLive() {
+      const strawStock = state.stocks.find(s => s.id === 'stk_01' || s.unit === 'bottes' || s.name.toLowerCase().includes('paille'));
+      const strawAvail = strawStock ? strawStock.quantity : 0;
+      const strawReq = parseFloat(document.getElementById('table-straw-bottes')?.value) || 0;
+
+      const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
+      const spawnStock = state.stocks.find(s => s.id === spawnStockId);
+      const spawnAvail = spawnStock ? spawnStock.quantity : 0;
+      const spawnReq = parseFloat(document.getElementById('table-spawn-sacs')?.value) || 0;
+
+      const alertBox = document.getElementById('table-stock-alert-msg');
+      const submitBtn = document.getElementById('btn-submit-table');
+
+      let errors = [];
+      if (strawReq > strawAvail) {
+        errors.push(`Paille insuffisante : ${strawReq} bottes demandées vs ${strawAvail} en stock.`);
+      }
+      if (!spawnStock || spawnReq > spawnAvail) {
+        errors.push(`Mycélium insuffisant : ${spawnReq} sacs demandés vs ${spawnAvail} en stock.`);
+      }
+
+      if (errors.length > 0) {
+        if (alertBox) {
+          alertBox.innerHTML = `⛔ <strong>Création bloquée :</strong><br>${errors.join('<br>')}`;
+          alertBox.classList.remove('hidden');
+        }
+        if (submitBtn) {
+          submitBtn.classList.add('opacity-50');
+        }
+      } else {
+        if (alertBox) alertBox.classList.add('hidden');
+        if (submitBtn) submitBtn.classList.remove('opacity-50');
+      }
     }
 
     function saveNewTable() {
       const code = (document.getElementById('table-code').value || '').trim();
       const name = (document.getElementById('table-name').value || '').trim() || ('Table ' + code);
-      const strain = (document.getElementById('table-strain').value || '').trim() || 'Pleurote Gris HK35';
       const date = document.getElementById('table-date').value || new Date().toISOString().slice(0, 10);
+      const spawnStockId = document.getElementById('table-spawn-stock-id')?.value;
       const strawBottes = parseFloat(document.getElementById('table-straw-bottes').value) || 0;
       const spawnSacs = parseFloat(document.getElementById('table-spawn-sacs').value) || 0;
       const sacsCount = parseInt(document.getElementById('table-sacs-count').value) || 0;
@@ -2994,34 +3686,58 @@
       const notes = (document.getElementById('table-notes').value || '').trim();
 
       if (!code) {
-        alert('Veuillez saisir un code pour cette table');
+        alert('Veuillez saisir un code pour cette table.');
         return;
       }
 
-      // 1. Déduction automatique du stock de paille (bottes)
+      // ==========================================
+      // CONTRÔLE STRICT DES STOCKS (BLOCKAGE STRICT)
+      // ==========================================
+      // 1. Contrôle Paille
       const strawStock = state.stocks.find(s => s.id === 'stk_01' || s.unit === 'bottes' || s.name.toLowerCase().includes('paille'));
+      const strawAvail = strawStock ? strawStock.quantity : 0;
+      if (strawBottes > strawAvail) {
+        alert(`⛔ CRÉATION BLOQUÉE : STOCK DE PAILLE INSUFFISANT !\n\nQuantité requise : ${strawBottes} bottes\nQuantité disponible en stock : ${strawAvail} bottes\n\nVeuillez ajuster la quantité ou réapprovisionner votre stock de paille avant de continuer.`);
+        return;
+      }
+
+      // 2. Contrôle Mycélium / Souche
+      const spawnStock = state.stocks.find(s => s.id === spawnStockId);
+      const spawnAvail = spawnStock ? spawnStock.quantity : 0;
+      const strainName = spawnStock ? (spawnStock.strain || spawnStock.name) : 'cette souche';
+      if (!spawnStock || spawnSacs > spawnAvail) {
+        alert(`⛔ CRÉATION BLOQUÉE : STOCK DE MYCÉLIUM INSUFFISANT !\n\nSouche sélectionnée : ${strainName}\nQuantité requise : ${spawnSacs} sacs\nQuantité disponible en stock : ${spawnAvail} sacs (${(spawnAvail * (spawnStock?.bagWeightKg || 2)).toFixed(1)} kg)\n\nVeuillez réapprovisionner cette souche ou ajuster le nombre de sacs avant de continuer.`);
+        return;
+      }
+
+      // 3. Déduction stricte du stock de paille
       if (strawStock && strawBottes > 0) {
         strawStock.quantity = Math.max(0, Math.round((strawStock.quantity - strawBottes) * 10) / 10);
       }
 
-      // 2. Déduction automatique du stock de blanc / mycélium (sacs de 2kg)
-      const spawnStock = state.stocks.find(s => s.id === 'stk_02' || (s.unit === 'sacs' && s.category.includes('Blanc')) || s.name.toLowerCase().includes('blanc') || s.name.toLowerCase().includes('mycélium'));
+      // 4. Déduction stricte du stock de mycélium sur la souche exacte
       if (spawnStock && spawnSacs > 0) {
         spawnStock.quantity = Math.max(0, Math.round((spawnStock.quantity - spawnSacs) * 10) / 10);
       }
 
-      // 3. Déduction des sacs plastiques si consommable présent
+      // 5. Déduction des sacs plastiques de culture si en stock
       const bagsStock = state.stocks.find(s => s.id === 'stk_03' || s.name.toLowerCase().includes('sacs de culture'));
       if (bagsStock && sacsCount > 0) {
         bagsStock.quantity = Math.max(0, bagsStock.quantity - sacsCount);
       }
 
-      // 4. Création de la table
+      // 6. Calcul de la semaine ISO de rattachement
+      const weekInfo = getWeekInfo(date);
+
+      // 7. Enregistrement de la table
       const newTable = {
         id: code,
         name: name,
         date: date,
-        strain: strain,
+        weekId: weekInfo.weekId,
+        weekLabel: weekInfo.weekLabel,
+        strain: strainName,
+        spawnStockId: spawnStock.id,
         substrate: 'Paille de blé pasteurisée',
         strawBottes: strawBottes,
         spawnSacs: spawnSacs,
@@ -3029,6 +3745,7 @@
         bagsCreated: sacsCount,
         bucketsCreated: seauxCount,
         status: 'Actif',
+        archived: false,
         notes: notes
       };
 
@@ -3038,7 +3755,7 @@
       if (!state.batches) state.batches = [];
       state.batches.unshift({
         id: code,
-        strain: strain,
+        strain: strainName,
         substrate: 'Paille de blé pasteurisée',
         strawBottes: strawBottes,
         spawnSacs: spawnSacs,
@@ -3049,7 +3766,7 @@
 
       const cleanCode = code.replace(/[^A-Za-z0-9]/g, '');
 
-      // 5. Génération des sacs individuels
+      // 8. Génération des sacs individuels
       for (let i = 1; i <= sacsCount; i++) {
         const numStr = i.toString().padStart(2, '0');
         state.bags.unshift({
@@ -3059,7 +3776,7 @@
           type: 'sac',
           status: 'incubation',
           weight: weightPerContainer,
-          strain: strain,
+          strain: strainName,
           incubationDate: date,
           fruitingDate: null,
           contaminationDate: null,
@@ -3069,7 +3786,7 @@
         });
       }
 
-      // 6. Génération des seaux individuels
+      // 9. Génération des seaux individuels
       for (let i = 1; i <= seauxCount; i++) {
         const numStr = i.toString().padStart(2, '0');
         state.bags.unshift({
@@ -3079,7 +3796,7 @@
           type: 'seau',
           status: 'incubation',
           weight: weightPerContainer,
-          strain: strain,
+          strain: strainName,
           incubationDate: date,
           fruitingDate: null,
           contaminationDate: null,
@@ -3089,9 +3806,12 @@
         });
       }
 
+      // S'assurer que la semaine est développée
+      expandedWeekIds.add(weekInfo.weekId);
+
       saveState();
       closeModal();
-      showToast(`Table ${code} créée ! Stock déduit : -${strawBottes} botte(s), -${spawnSacs} sac(s) mycélium.`);
+      showToast(`Table ${code} créée dans ${weekInfo.shortTitle} ! Stock déduit : -${strawBottes} botte(s), -${spawnSacs} sac(s) (${strainName}).`);
     }
 
     function moveToFruiting(id) {
