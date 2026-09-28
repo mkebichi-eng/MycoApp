@@ -123,11 +123,16 @@
             <span id="header-user-name" class="text-[11px]">Moura</span>
           </button>
         </div>
+
+        <!-- Logout Button -->
+        <button onclick="logoutUser()" id="header-logout-btn" class="p-1.5 bg-[#1a2a1a] hover:bg-red-950/60 border border-[#2d4a2d] hover:border-red-500/50 rounded-xl text-slate-400 hover:text-red-400 transition-all text-xs font-bold" title="Se déconnecter (Changer de compte)">
+          <span>🚪</span>
+        </button>
       </div>
     </div>
 
     <!-- Active Role Subheader -->
-    <div class="bg-[#142214] px-3.5 py-1.5 flex items-center justify-between text-xs border-b border-[#2d4a2d]/40 select-none">
+    <div id="active-role-subheader" class="bg-[#142214] px-3.5 py-1.5 flex items-center justify-between text-xs border-b border-[#2d4a2d]/40 select-none">
       <div class="flex items-center gap-1.5">
         <span class="w-2 h-2 rounded-full bg-[#7bc67e] animate-pulse"></span>
         <span id="role-status-text" class="text-[11px] text-[#7bc67e] font-semibold">Mode Propriétaire (Admin)</span>
@@ -214,7 +219,7 @@
         { id: 'usr_yacine', name: 'Yacine Livreur', email: 'yacine@ferme.dz', role: 'delivery', phone: '+213772223344', farmId: 'farm_01', status: 'active', title: 'Livreur Principal' },
         { id: 'usr_amina', name: 'Amina Benali', email: 'amina@ferme.dz', role: null, phone: '+213553334455', farmId: 'farm_01', status: 'pending', title: 'Nouvelle Recrue (En attente)' }
       ],
-      currentUser: { id: 'usr_moura', name: 'Moura', email: 'moura@ferme.dz', role: 'admin', farmId: 'farm_01' },
+      currentUser: null, // Par défaut non connecté => Ouverture directe sur le portail d'identification
       notifications: [
         { id: 'notif_01', title: '⚠️ Alerte Stock : Paille', body: 'Stock de paille à 12 bottes (proche seuil 5).', type: 'stock', date: '28 Sep 14:00', read: false },
         { id: 'notif_02', title: '🛵 Course assignée', body: 'Supermarché Bio Oasis assigné à Karim Meziani.', type: 'delivery', date: '28 Sep 12:30', read: false },
@@ -589,6 +594,11 @@
     if (!state.tables || state.tables.length === 0) state.tables = initialSeedState.tables;
     if (!state.bags || state.bags.length === 0 || !state.bags[0].tableId) state.bags = initialSeedState.bags;
 
+    // Si aucune session active enregistrée, l'utilisateur démarre sur le portail d'identification
+    if (localStorage.getItem('mycotrack_session_active') !== 'true') {
+      state.currentUser = null;
+    }
+
     function saveState() {
       localStorage.setItem('mycotrack_state_v8', JSON.stringify(state));
       localStorage.setItem('mycotrack_state_v7', JSON.stringify(state));
@@ -783,18 +793,31 @@
       const bottomNav = document.getElementById('bottom-nav');
 
       if (role === 'delivery') {
-        adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
-        deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#e0b87a] text-black shadow";
-        statusText.innerText = "Mode Livreur • Chauffeur terrain";
-        statusText.className = "text-[11px] text-[#e0b87a] font-semibold";
-        bottomNav.classList.add('hidden');
+        if (adminBtn) adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+        if (deliveryBtn) deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#e0b87a] text-black shadow";
+        if (statusText) {
+          statusText.innerText = "Mode Livreur • Chauffeur terrain";
+          statusText.className = "text-[11px] text-[#e0b87a] font-semibold";
+        }
+        if (bottomNav) bottomNav.classList.add('hidden');
         renderDeliveryView();
+      } else if (role === 'culture') {
+        if (deliveryBtn) deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+        if (adminBtn) adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow";
+        if (statusText) {
+          statusText.innerText = "Mode Responsable Culture • Tables & Récoltes";
+          statusText.className = "text-[11px] text-emerald-400 font-semibold";
+        }
+        if (bottomNav) bottomNav.classList.remove('hidden');
+        switchTab(currentTab === 'delivery' ? 'production' : currentTab);
       } else {
-        deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
-        adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow";
-        statusText.innerText = "Mode Propriétaire & Responsable";
-        statusText.className = "text-[11px] text-[#7bc67e] font-semibold";
-        bottomNav.classList.remove('hidden');
+        if (deliveryBtn) deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+        if (adminBtn) adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-[#4a9e4e] text-white shadow";
+        if (statusText) {
+          statusText.innerText = "Mode Propriétaire (Admin)";
+          statusText.className = "text-[11px] text-[#7bc67e] font-semibold";
+        }
+        if (bottomNav) bottomNav.classList.remove('hidden');
         switchTab(currentTab === 'delivery' ? 'dashboard' : currentTab);
       }
     }
@@ -836,7 +859,21 @@
     }
 
     function renderCurrentView() {
-      if (currentRole === 'delivery') {
+      // Si l'utilisateur n'est pas identifié => Afficher le portail d'identification
+      if (!state.currentUser) {
+        renderAuthLandingPage();
+        return;
+      }
+
+      // Si le compte est en attente d'approbation par le gérant
+      if (state.currentUser.status === 'pending') {
+        renderPendingApprovalPage();
+        return;
+      }
+
+      updateHeaderForAuthenticatedUser();
+
+      if (currentRole === 'delivery' || state.currentUser.role === 'delivery') {
         renderDeliveryView();
       } else {
         if (currentTab === 'dashboard') renderDashboardView();
@@ -5975,6 +6012,13 @@
             </button>
           </div>
 
+          <!-- Déconnexion -->
+          <div class="pt-2 border-t border-[#2d4a2d]/60">
+            <button onclick="logoutUser(); closeModal();" class="w-full py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+              <span>🚪</span> <span>Se déconnecter (Portail d'identification)</span>
+            </button>
+          </div>
+
           <button onclick="closeModal()" class="w-full py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Fermer</button>
         </div>
       `);
@@ -5984,10 +6028,15 @@
       const user = (state.users || []).find(u => u.id === userId);
       if (user) {
         state.currentUser = user;
+        localStorage.setItem('mycotrack_session_active', 'true');
         saveState();
         closeModal();
-        setRole(user.role || 'culture');
-        showToast(`Connecté en tant que ${user.name} (${user.role ? user.role.toUpperCase() : 'En attente'})`);
+        if (user.status === 'pending') {
+          renderPendingApprovalPage();
+        } else {
+          setRole(user.role || 'culture');
+          showToast(`Connecté en tant que ${user.name} (${user.role ? user.role.toUpperCase() : 'En attente'})`);
+        }
       }
     }
 
@@ -5998,6 +6047,459 @@
       } else {
         alert(`Code d'invitation : ${text}`);
       }
+    }
+
+    // ==========================================
+    // PORTAIL D'IDENTIFICATION & ACCÈS DIRECT
+    // ==========================================
+    let authTab = 'login'; // 'login' | 'join' | 'create'
+    function setAuthTab(tab) {
+      authTab = tab;
+      renderAuthLandingPage();
+    }
+
+    function updateHeaderForAuthenticatedUser() {
+      const u = state.currentUser;
+      if (!u) return;
+      const f = state.farm || { name: 'Ferme Moura Pleurotes' };
+
+      const farmHeader = document.getElementById('farm-name-header');
+      if (farmHeader) farmHeader.innerText = f.name;
+
+      const headerAvatar = document.getElementById('header-user-avatar');
+      if (headerAvatar) headerAvatar.innerText = u.role === 'admin' ? '👑' : (u.role === 'culture' ? '🍄' : (u.role === 'delivery' ? '🛵' : '⏳'));
+
+      const headerUserName = document.getElementById('header-user-name');
+      if (headerUserName) headerUserName.innerText = (u.name || 'Utilisateur').split(' ')[0];
+
+      const notifBtn = document.getElementById('header-notif-btn');
+      if (notifBtn) notifBtn.classList.remove('hidden');
+
+      const logoutBtn = document.getElementById('header-logout-btn');
+      if (logoutBtn) logoutBtn.classList.remove('hidden');
+
+      const subheader = document.getElementById('active-role-subheader');
+      if (subheader) subheader.classList.remove('hidden');
+
+      const bottomNav = document.getElementById('bottom-nav');
+      if (bottomNav) {
+        if (u.role === 'delivery') {
+          bottomNav.classList.add('hidden');
+        } else {
+          bottomNav.classList.remove('hidden');
+        }
+      }
+    }
+
+    function renderAuthLandingPage() {
+      const container = document.getElementById('app-content');
+      if (!container) return;
+
+      const farmHeader = document.getElementById('farm-name-header');
+      if (farmHeader) farmHeader.innerText = "Portail d'identification";
+
+      const headerAvatar = document.getElementById('header-user-avatar');
+      if (headerAvatar) headerAvatar.innerText = "🔑";
+
+      const headerUserName = document.getElementById('header-user-name');
+      if (headerUserName) headerUserName.innerText = "Connexion";
+
+      const notifBtn = document.getElementById('header-notif-btn');
+      if (notifBtn) notifBtn.classList.add('hidden');
+
+      const logoutBtn = document.getElementById('header-logout-btn');
+      if (logoutBtn) logoutBtn.classList.add('hidden');
+
+      const subheader = document.getElementById('active-role-subheader');
+      if (subheader) subheader.classList.add('hidden');
+
+      const bottomNav = document.getElementById('bottom-nav');
+      if (bottomNav) bottomNav.classList.add('hidden');
+
+      const farm = state.farm || { name: 'Ferme Moura Pleurotes', inviteCode: 'MYCO-MOURA-2026' };
+      const allUsers = state.users || [];
+
+      let formHtml = '';
+
+      if (authTab === 'login') {
+        formHtml = `
+          <div class="space-y-4">
+            <!-- Formulaire Standard -->
+            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3">
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Email ou Identifiant</label>
+                <input id="auth-login-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="moura@ferme.dz" value="moura@ferme.dz">
+              </div>
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Mot de passe</label>
+                <input id="auth-login-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="••••••••" value="password123">
+              </div>
+              
+              <div class="flex items-center justify-between text-[11px] pt-1 text-[#888]">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="auth-remember-me" checked class="accent-[#4a9e4e] rounded">
+                  <span>Rester connecté</span>
+                </label>
+                <span class="text-[#7bc67e] hover:underline cursor-pointer" onclick="showToast('Sélectionnez directement un profil ci-dessous pour tester.')">Aide connexion</span>
+              </div>
+
+              <button onclick="loginWithFormCredentials()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
+                <span>🔑</span> <span>Se Connecter</span>
+              </button>
+            </div>
+
+            <!-- Accès Rapide Démo 1-Clic -->
+            <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>⚡</span> <span>Accès Rapide (Profils Démo)</span>
+                </span>
+                <span class="text-[10px] text-[#7bc67e] font-semibold bg-[#1f3a1f] px-2 py-0.5 rounded-full border border-[#7bc67e]/30">1 Clic</span>
+              </div>
+              <p class="text-[11px] text-[#888]">Choisissez un profil ci-dessous pour tester directement son interface et ses permissions :</p>
+              
+              <div class="grid grid-cols-1 gap-2 pt-1">
+                ${allUsers.map(usr => `
+                  <button onclick="loginDirectUser('${usr.id}')" class="p-2.5 rounded-xl border border-[#2d4a2d] hover:border-[#7bc67e] bg-[#0f1a0f] hover:bg-[#1f3a1f] transition-all flex items-center justify-between text-left group">
+                    <div class="flex items-center gap-2.5">
+                      <span class="text-lg w-8 h-8 rounded-xl bg-[#142214] flex items-center justify-center border border-[#2d4a2d] group-hover:border-[#7bc67e]">
+                        ${usr.role === 'admin' ? '👑' : (usr.role === 'culture' ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}
+                      </span>
+                      <div>
+                        <span class="text-xs font-bold text-white block">${usr.name}</span>
+                        <span class="text-[10px] text-[#888]">${usr.title || (usr.role ? usr.role.toUpperCase() : 'En attente')}</span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[10px] px-2 py-0.5 rounded-md font-bold ${usr.role === 'admin' ? 'bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/40' : (usr.role === 'culture' ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' : (usr.role === 'delivery' ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-300'))}">
+                        ${usr.status === 'pending' ? 'Attente ⏳' : 'Entrer ➔'}
+                      </span>
+                    </div>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (authTab === 'join') {
+        formHtml = `
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3">
+            <div class="border-b border-[#2d4a2d] pb-2">
+              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>👥</span> <span>Rejoindre une Ferme Existante</span>
+              </h3>
+              <p class="text-[11px] text-[#888] mt-0.5">Rattachez-vous à l'exploitation en entrant le code d'invitation de votre gérant.</p>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Code d'invitation Ferme *</label>
+              <input id="portal-join-code" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-[#7bc67e] font-mono font-bold text-sm text-center uppercase tracking-widest focus:outline-none" value="${farm.inviteCode || 'MYCO-MOURA-2026'}" placeholder="MYCO-XXXX-2026">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom & Prénom *</label>
+                <input id="portal-join-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="ex: Reda Bensalem">
+              </div>
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone</label>
+                <input id="portal-join-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="+213 550 ...">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Email professionnel *</label>
+              <input id="portal-join-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="reda@ferme.dz">
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Mot de passe *</label>
+              <input id="portal-join-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="••••••••">
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Rôle souhaité *</label>
+              <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs">
+                <option value="culture">🍄 Responsable Culture & Production</option>
+                <option value="delivery">🛵 Livreur & Distribution Express</option>
+              </select>
+            </div>
+
+            <div class="p-2.5 bg-[#0a120a] rounded-xl border border-amber-500/30 text-[10px] text-amber-300/90 leading-tight">
+              ℹ️ Après inscription, votre compte passera en statut "En attente" jusqu'à ce que l'administrateur valide votre adhésion dans son Carnet Pro.
+            </div>
+
+            <button onclick="submitJoinFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
+              <span>📨</span> <span>Envoyer ma Demande d'Adhésion</span>
+            </button>
+          </div>
+        `;
+      } else if (authTab === 'create') {
+        formHtml = `
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3">
+            <div class="border-b border-[#2d4a2d] pb-2">
+              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>🏢</span> <span>Créer une Nouvelle Ferme Mycologique</span>
+              </h3>
+              <p class="text-[11px] text-[#888] mt-0.5">Vous serez le Propriétaire & Administrateur principal de cet espace.</p>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom de l'Exploitation / Ferme *</label>
+              <input id="portal-create-farm-name" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white text-xs font-bold" placeholder="ex: Champignons Bio des Aurès" value="Ferme Pleurotes de Moura">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom du Gérant *</label>
+                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="ex: Moura" value="Moura">
+              </div>
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone Gérant</label>
+                <input id="portal-create-owner-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="+213 550 ...">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Email Gérant *</label>
+              <input id="portal-create-owner-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="moura@ferme.dz" value="moura@ferme.dz">
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Mot de passe Administrateur *</label>
+              <input id="portal-create-owner-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs" placeholder="••••••••" value="password123">
+            </div>
+
+            <button onclick="submitCreateFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
+              <span>👑</span> <span>Créer ma Ferme & Devenir Gérant</span>
+            </button>
+          </div>
+        `;
+      }
+
+      container.innerHTML = `
+        <div class="max-w-md mx-auto space-y-4 pb-8 select-none">
+          <!-- En-tête de bienvenue & Logo -->
+          <div class="text-center pt-3 pb-1 space-y-1.5">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#142214] border-2 border-[#7bc67e] shadow-lg shadow-[#4a9e4e]/20 text-3xl">
+              🍄
+            </div>
+            <div>
+              <h1 class="text-base font-extrabold text-white tracking-wide">MycoTrack Pro</h1>
+              <p class="text-[11px] text-[#7bc67e] font-semibold">${farm.name}</p>
+              <p class="text-[10px] text-[#888]">Portail d'identification sécurisé • Gestion & Traçabilité</p>
+            </div>
+          </div>
+
+          <!-- Sélecteur d'onglets d'authentification -->
+          <div class="flex bg-[#142214] p-1 rounded-2xl border border-[#2d4a2d] text-xs font-bold">
+            <button onclick="setAuthTab('login')" class="flex-1 py-2 rounded-xl transition-all text-center ${authTab === 'login' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
+              🔑 Connexion
+            </button>
+            <button onclick="setAuthTab('join')" class="flex-1 py-2 rounded-xl transition-all text-center ${authTab === 'join' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
+              👥 Rejoindre
+            </button>
+            <button onclick="setAuthTab('create')" class="flex-1 py-2 rounded-xl transition-all text-center ${authTab === 'create' ? 'bg-[#2d4a2d] text-white shadow' : 'text-[#888] hover:text-white'}">
+              🏢 Créer Ferme
+            </button>
+          </div>
+
+          <!-- Corps du formulaire -->
+          ${formHtml}
+        </div>
+      `;
+    }
+
+    function renderPendingApprovalPage() {
+      const container = document.getElementById('app-content');
+      if (!container) return;
+
+      const u = state.currentUser;
+      const f = state.farm || { name: 'Ferme Moura Pleurotes' };
+
+      const bottomNav = document.getElementById('bottom-nav');
+      if (bottomNav) bottomNav.classList.add('hidden');
+      const subheader = document.getElementById('active-role-subheader');
+      if (subheader) subheader.classList.add('hidden');
+
+      container.innerHTML = `
+        <div class="max-w-md mx-auto space-y-4 pt-6 pb-8 text-center select-none">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-amber-950/40 border-2 border-amber-500/60 shadow-lg text-3xl">
+            ⏳
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">Adhésion en Attente de Validation</h2>
+            <p class="text-xs text-amber-400 font-semibold mt-1">Bonjour ${u.name}, votre demande a bien été reçue !</p>
+          </div>
+
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] text-left text-xs space-y-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🏢</span>
+              <div>
+                <span class="text-[10px] text-[#888] block">Ferme ciblée</span>
+                <span class="font-bold text-white">${f.name}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-base">📧</span>
+              <div>
+                <span class="text-[10px] text-[#888] block">Votre Email</span>
+                <span class="font-semibold text-slate-300">${u.email}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-base">🛡️</span>
+              <div>
+                <span class="text-[10px] text-[#888] block">Statut de sécurité</span>
+                <span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded-full text-[10px]">Validation Admin Requise</span>
+              </div>
+            </div>
+            
+            <p class="text-[11px] text-[#aaa] pt-2 border-t border-[#2d4a2d] leading-relaxed">
+              Pour des raisons de traçabilité et de sécurité des cultures et des finances, le gérant de la ferme doit valider votre profil dans <strong>Carnet Pro ➔ Équipe & Rôles</strong> avant de débloquer vos accès.
+            </p>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <button onclick="checkPendingApprovalStatus()" class="w-full py-2.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow flex items-center justify-center gap-1.5">
+              <span>🔄</span> <span>Actualiser mon Statut</span>
+            </button>
+            <button onclick="logoutUser()" class="w-full py-2.5 bg-[#1a2a1a] hover:bg-red-950/60 border border-[#2d4a2d] text-red-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5">
+              <span>🚪</span> <span>Se déconnecter (Changer de compte)</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function checkPendingApprovalStatus() {
+      if (!state.currentUser) return;
+      const refreshed = (state.users || []).find(u => u.id === state.currentUser.id);
+      if (refreshed) {
+        state.currentUser = refreshed;
+        saveState();
+        if (refreshed.status === 'active') {
+          showToast(`Félicitations ${refreshed.name} ! Votre rôle ${refreshed.role.toUpperCase()} a été validé.`);
+          setRole(refreshed.role || 'culture');
+        } else {
+          showToast('Votre demande est toujours en cours d\'examen par l\'administrateur.');
+        }
+      }
+    }
+
+    function loginDirectUser(userId) {
+      const user = (state.users || []).find(u => u.id === userId);
+      if (!user) return;
+      state.currentUser = user;
+      localStorage.setItem('mycotrack_session_active', 'true');
+      saveState();
+      if (user.status === 'pending') {
+        renderPendingApprovalPage();
+      } else {
+        setRole(user.role || 'culture');
+        showToast(`Connecté en tant que ${user.name} (${user.title || user.role}).`);
+      }
+    }
+
+    function loginWithFormCredentials() {
+      const emailInput = document.getElementById('auth-login-email');
+      const email = emailInput?.value.trim().toLowerCase();
+      if (!email) return alert('Veuillez saisir votre email.');
+
+      let user = (state.users || []).find(u => u.email.toLowerCase() === email);
+      if (!user) {
+        user = state.users[0] || { id: 'usr_moura', name: 'Moura', role: 'admin', email: email, status: 'active' };
+      }
+      loginDirectUser(user.id);
+    }
+
+    function logoutUser() {
+      state.currentUser = null;
+      localStorage.removeItem('mycotrack_session_active');
+      saveState();
+      showToast('Vous avez été déconnecté avec succès.');
+      renderCurrentView();
+    }
+
+    function submitJoinFarmFromPortal() {
+      const code = (document.getElementById('portal-join-code')?.value || '').trim().toUpperCase();
+      const name = (document.getElementById('portal-join-name')?.value || '').trim();
+      const phone = (document.getElementById('portal-join-phone')?.value || '').trim();
+      const email = (document.getElementById('portal-join-email')?.value || '').trim();
+      const roleReq = document.getElementById('portal-join-role-requested')?.value || 'culture';
+
+      if (!name || !email) return alert('Veuillez renseigner votre nom et votre email.');
+      if (code !== state.farm.inviteCode) {
+        return alert(`Code d'invitation invalide. Le code valide de cette ferme est "${state.farm.inviteCode}".`);
+      }
+
+      const newUser = {
+        id: 'usr_' + Date.now(),
+        name: name,
+        email: email,
+        phone: phone,
+        role: null,
+        requestedRole: roleReq,
+        farmId: state.farm.id,
+        status: 'pending',
+        title: roleReq === 'delivery' ? 'Livreur (En attente)' : 'Culture (En attente)'
+      };
+
+      state.users.push(newUser);
+      state.currentUser = newUser;
+      localStorage.setItem('mycotrack_session_active', 'true');
+      saveState();
+
+      triggerSystemPush(
+        `👥 Nouvelle Demande d'Adhésion`,
+        `${name} (${email}) demande à rejoindre l'équipe. Attribuez-lui son rôle dans Carnet Pro.`,
+        () => switchTab('carnet', 'team'),
+        'team'
+      );
+
+      showToast(`Demande envoyée ! Attente de validation par l'administrateur.`);
+      renderPendingApprovalPage();
+    }
+
+    function submitCreateFarmFromPortal() {
+      const farmName = (document.getElementById('portal-create-farm-name')?.value || '').trim();
+      const ownerName = (document.getElementById('portal-create-owner-name')?.value || '').trim();
+      const ownerPhone = (document.getElementById('portal-create-owner-phone')?.value || '').trim();
+      const ownerEmail = (document.getElementById('portal-create-owner-email')?.value || '').trim();
+
+      if (!farmName || !ownerName || !ownerEmail) {
+        return alert('Veuillez remplir le nom de la ferme, votre nom et votre email.');
+      }
+
+      const codeSuffix = Math.floor(1000 + Math.random() * 9000);
+      const inviteCode = 'MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix;
+
+      const ownerId = 'usr_' + Date.now();
+      state.farm = {
+        id: 'farm_' + Date.now(),
+        name: farmName,
+        inviteCode: inviteCode,
+        ownerId: ownerId,
+        createdAt: new Date().toISOString().slice(0, 10)
+      };
+
+      const ownerUser = {
+        id: ownerId,
+        name: ownerName,
+        email: ownerEmail,
+        phone: ownerPhone,
+        role: 'admin',
+        farmId: state.farm.id,
+        status: 'active',
+        title: 'Propriétaire & Gérant'
+      };
+
+      state.users.push(ownerUser);
+      state.currentUser = ownerUser;
+      localStorage.setItem('mycotrack_session_active', 'true');
+      saveState();
+      setRole('admin');
+      showToast(`Ferme "${farmName}" créée avec succès ! Code : ${inviteCode}`);
     }
 
     function openSignUpFormModal() {
@@ -6172,7 +6674,17 @@
 
     // Initialisation
     checkBadges();
-    setRole('admin');
+    const sessionActive = localStorage.getItem('mycotrack_session_active') === 'true';
+    if (!sessionActive || !state.currentUser) {
+      state.currentUser = null;
+      renderAuthLandingPage();
+    } else {
+      if (state.currentUser.status === 'pending') {
+        renderPendingApprovalPage();
+      } else {
+        setRole(state.currentUser.role || 'admin');
+      }
+    }
   </script>
 </body>
 </html>
