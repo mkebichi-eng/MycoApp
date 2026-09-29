@@ -903,6 +903,10 @@
       if (tab === 'bags') {
         tab = 'production';
       }
+      // Sécurité stricte des rôles : l'ouvrier ne peut pas naviguer vers Accueil ou Carnet
+      if (currentRole === 'culture' && (tab === 'dashboard' || tab === 'carnet' || tab === 'clients' || tab === 'deliverers')) {
+        tab = 'production';
+      }
       if (tab === 'clients') {
         tab = 'carnet';
         carnetSubTab = 'clients';
@@ -965,6 +969,10 @@
     // 1. DASHBOARD PRINCIPAL (FINANCES COMPLÈTES)
     // ==========================================
     function renderDashboardView() {
+      if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
+        switchTab('production');
+        return;
+      }
       const container = document.getElementById('app-content');
       
       // Calculs financiers rigoureux
@@ -2008,6 +2016,10 @@
     }
 
     function renderCarnetView() {
+      if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
+        switchTab('production');
+        return;
+      }
       const container = document.getElementById('app-content');
       const deliverers = state.deliverers || [];
 
@@ -6361,8 +6373,8 @@
                       <span class="font-bold text-white">${s.name}</span>
                       <span class="text-[10px] text-red-400 block">Reste : <strong>${s.quantity} ${s.unit}</strong> (Seuil : ${s.threshold})</span>
                     </div>
-                    <button onclick="closeModal(); switchTab('stock'); openNewExpenseModal('${s.id}');" class="px-2.5 py-1 bg-red-900 hover:bg-red-800 text-red-200 border border-red-500/50 rounded-lg text-[10px] font-bold">
-                      + Commander
+                    <button onclick="closeModal(); switchTab('stock'); ${currentRole === 'admin' ? `openNewExpenseModal('${s.id}');` : ''}" class="px-2.5 py-1 bg-red-900 hover:bg-red-800 text-red-200 border border-red-500/50 rounded-lg text-[10px] font-bold">
+                      ${currentRole === 'admin' ? '+ Commander' : 'Voir Stock'}
                     </button>
                   </div>
                 `).join('')}
@@ -6380,10 +6392,10 @@
                   <div class="flex justify-between items-center bg-[#0f1a0f]/80 p-2 rounded-xl text-xs">
                     <div>
                       <span class="font-bold text-white">${d.clientName}</span>
-                      <span class="text-[10px] text-amber-400 block">${d.quantityKg} kg • ${d.totalAmount.toLocaleString()} DA • Livreur : ${d.delivererName}</span>
+                      <span class="text-[10px] text-amber-400 block">${d.quantityKg} kg ${currentRole === 'admin' ? `• ${d.totalAmount.toLocaleString()} DA` : ''} • Livreur : ${d.delivererName}</span>
                     </div>
-                    <button onclick="closeModal(); setRole('delivery');" class="px-2.5 py-1 bg-amber-900 hover:bg-amber-800 text-amber-200 border border-amber-500/50 rounded-lg text-[10px] font-bold">
-                      Voir Course
+                    <button onclick="closeModal(); ${currentRole === 'delivery' ? `setRole('delivery');` : `switchTab('sales');`}" class="px-2.5 py-1 bg-amber-900 hover:bg-amber-800 text-amber-200 border border-amber-500/50 rounded-lg text-[10px] font-bold">
+                      ${currentRole === 'delivery' ? 'Voir Course' : 'Détails'}
                     </button>
                   </div>
                 `).join('')}
@@ -6391,7 +6403,7 @@
             </div>
           ` : ''}
 
-          ${pendingUsers.length > 0 ? `
+          ${(pendingUsers.length > 0 && currentRole === 'admin') ? `
             <div class="p-3 bg-[#1f3a1f] border border-[#7bc67e]/50 rounded-2xl space-y-2">
               <span class="text-xs font-bold text-[#7bc67e] flex items-center gap-1.5">
                 <span>👥</span> <span>${pendingUsers.length} Demande(s) d'adhésion d'employé en attente :</span>
