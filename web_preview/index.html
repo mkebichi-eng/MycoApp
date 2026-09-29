@@ -1422,6 +1422,10 @@
 
     // Modale de Création de Vente avec calculs automatiques
     function openNewSaleModal(preselectedClientId = null) {
+      if (currentRole === 'culture') {
+        openWorkerDispatchModal();
+        return;
+      }
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
           <span>🛒</span> <span>Créer une Vente & Assigner un Livreur</span>
@@ -1714,6 +1718,7 @@
     // 3. VALIDATION ENCAISSEMENT & DÉCOMPTE CAISSE
     // ==========================================
     function openSettlementModal(orderId) {
+      if (currentRole !== 'admin') return;
       const d = state.deliveries.find(x => x.id === orderId);
       if (!d) return;
 
@@ -2292,6 +2297,7 @@
 
     // Modal pour ajouter un livreur
     function openNewDelivererModal() {
+      if (currentRole !== 'admin') return;
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
           <span>🛵</span> <span>Ajouter un Nouveau Livreur</span>
@@ -2362,6 +2368,7 @@
     }
 
     function openEditDelivererModal(id) {
+      if (currentRole !== 'admin') return;
       const d = (state.deliverers || []).find(x => x.id === id);
       if (!d) return;
 
@@ -2433,6 +2440,7 @@
     }
 
     function openAddTeamMemberModal() {
+      if (currentRole !== 'admin') return;
       const randomPin = Math.floor(1000 + Math.random() * 9000);
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
@@ -2531,6 +2539,7 @@
 
     // Modales et actions Clients (inchangées et optimisées)
     function openNewClientModal() {
+      if (currentRole !== 'admin') return;
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
           <span>👤</span> <span>Ajouter un Nouveau Client</span>
@@ -2608,6 +2617,7 @@
     }
 
     function openEditClientModal(id) {
+      if (currentRole !== 'admin') return;
       const c = state.clients.find(x => x.id === id);
       if (!c) return;
       showModal(`
@@ -2992,6 +3002,7 @@
     }
 
     function openAddSpawnStrainModal() {
+      if (currentRole !== 'admin') return;
       const strainsList = state.strains || [
         'Pleurote Gris HK35',
         'Pleurote Jaune (Cornucopiae)',
@@ -3346,6 +3357,7 @@
     }
 
     function openNewStockModal() {
+      if (currentRole !== 'admin') return;
       const unitsOptions = (state.units || ['kg', 'unités', 'L', 'g']).map(u => `<option value="${u}">${u}</option>`).join('');
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
@@ -3475,6 +3487,7 @@
     }
 
     function openEditThresholdModal(id) {
+      if (currentRole !== 'admin') return;
       const item = state.stocks.find(s => s.id === id);
       if (!item) return;
 
@@ -5500,6 +5513,7 @@
     }
 
     function openNewExpenseModal(preselectedStockId = null) {
+      if (currentRole !== 'admin') return;
       const isStockPreset = !!preselectedStockId;
       const presetStock = isStockPreset ? state.stocks.find(s => s.id === preselectedStockId) : null;
 
