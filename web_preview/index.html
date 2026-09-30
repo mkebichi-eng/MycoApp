@@ -6797,7 +6797,44 @@
 
           <!-- Corps du formulaire -->
           ${formHtml}
-        </div>
+        
+          <!-- Section Téléchargement Mobile & Accès -->
+          <div class="mt-6 pt-4 border-t border-[#2d4a2d]/80 space-y-3">
+            <div class="text-center">
+              <span class="text-[11px] font-bold text-[#aaa] uppercase tracking-wider">📲 Applications Mobiles & Accès</span>
+            </div>
+
+            <!-- Bouton Téléchargement Direct APK Android -->
+            <a href="MycoTrackPro.apk" download="MycoTrackPro.apk" class="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#142214] to-[#1f3a1f] border border-[#4a9e4e]/60 hover:border-[#7bc67e] transition-all group shadow-md cursor-pointer">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-[#4a9e4e]/20 border border-[#4a9e4e]/40 flex items-center justify-center text-xl">
+                  🤖
+                </div>
+                <div class="text-left">
+                  <div class="font-bold text-white text-xs flex items-center gap-1.5">
+                    <span>Télécharger l'APK Android</span>
+                    <span class="text-[9px] bg-[#4a9e4e] text-white px-1.5 py-0.5 rounded-full font-mono">v1.0</span>
+                  </div>
+                  <span class="text-[10px] text-[#aaa] block">Installation directe sans Play Store</span>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="text-xs text-[#7bc67e] font-bold group-hover:translate-x-0.5 inline-block transition-transform">📥 Obtenir</span>
+              </div>
+            </a>
+
+            <!-- Guide Accès iOS (iPhone & iPad) -->
+            <div class="p-3 rounded-2xl bg-[#0a120a] border border-[#2d4a2d] text-left text-xs space-y-1.5">
+              <div class="flex items-center gap-2">
+                <span class="text-base">🍎</span>
+                <span class="font-bold text-white text-xs">Utilisateurs iPhone & iPad (iOS)</span>
+              </div>
+              <p class="text-[11px] text-[#aaa] leading-relaxed">
+                Ouvrez ce lien dans <strong class="text-white">Safari</strong>, appuyez sur le bouton <strong class="text-white">Partager ⎋</strong> puis sélectionnez <strong class="text-[#7bc67e]">« Sur l'écran d'accueil » ➕</strong> pour installer la Web App officielle plein écran.
+              </p>
+            </div>
+          </div>
+</div>
       `;
     }
 
