@@ -315,6 +315,13 @@
     }
 
     // Chargement de l'état de production vierge (Stockage local + Cloud Firestore)
+    
+    // Variables Graphiques & Périodes Financières (Accueil)
+    let dashboardPeriod = 'daily_30d'; // 'daily_30d', 'weekly_12w', 'monthly_12m', 'monthly_all'
+    let dashboardMetric = 'net'; // 'net', 'revenue', 'expenses', 'combined'
+    let dashboardChartType = 'bar'; // 'bar', 'area'
+    let dashboardSelectedPointId = null;
+
     let storedState = JSON.parse(localStorage.getItem('mycotrack_prod_v1') || 'null');
     let state = storedState || JSON.parse(JSON.stringify(initialSeedState));
 
@@ -852,6 +859,441 @@
     // ==========================================
     // 1. DASHBOARD PRINCIPAL (FINANCES COMPLÈTES)
     // ==========================================
+    
+    // ==========================================
+    // MOTEUR ANALYTIQUE & GRAPHIQUES PÉRIODIQUES
+    // ==========================================
+    function setDashboardPeriod(p) {
+      dashboardPeriod = p;
+      dashboardSelectedPointId = null;
+      renderDashboardView();
+    }
+
+    function setDashboardMetric(m) {
+      dashboardMetric = m;
+      renderDashboardView();
+    }
+
+    function setDashboardChartType(t) {
+      dashboardChartType = t;
+      renderDashboardView();
+    }
+
+    function selectDashboardChartPoint(pointId) {
+      dashboardSelectedPointId = (dashboardSelectedPointId === pointId) ? null : pointId;
+      renderDashboardView();
+    }
+
+    function getPeriodicFinancialData(period, metric) {
+      const deliveries = state.deliveries || [];
+      const expenses = state.expenses || [];
+
+      function getItemDate(item) {
+        if (item.dateIso && /^\d{4}-\d{2}-\d{2}$/.test(item.dateIso)) return item.dateIso;
+        if (item.createdAt) {
+          const d = new Date(item.createdAt);
+          if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+        }
+        return new Date().toISOString().slice(0, 10);
+      }
+
+      const now = new Date();
+      let intervals = [];
+
+      if (period === 'daily_30d') {
+        // 30 derniers jours (Journalier)
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - i);
+          const iso = d.toISOString().slice(0, 10);
+          const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+          const label = `${d.getDate()} ${months[d.getMonth()]}`;
+          const fullLabel = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+          intervals.push({ id: iso, label, fullLabel, startIso: iso, endIso: iso });
+        }
+      } else if (period === 'weekly_12w') {
+        // 12 dernières semaines (~3 mois, Hebdomadaire)
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - (i * 7));
+          const dayNr = (d.getDay() + 6) % 7;
+          const monday = new Date(d);
+          monday.setDate(d.getDate() - dayNr);
+          const sunday = new Date(monday);
+          sunday.setDate(monday.getDate() + 6);
+
+          const startIso = monday.toISOString().slice(0, 10);
+          const endIso = sunday.toISOString().slice(0, 10);
+          const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+          const label = `${monday.getDate()} ${months[monday.getMonth()]}`;
+          const fullLabel = `Semaine du ${monday.getDate()} ${months[monday.getMonth()]} au ${sunday.getDate()} ${months[sunday.getMonth()]} ${sunday.getFullYear()}`;
+          intervals.push({ id: `W_${startIso}`, label, fullLabel, startIso, endIso });
+        }
+      } else if (period === 'monthly_12m') {
+        // 12 derniers mois (Mensuel)
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const y = d.getFullYear();
+          const m = (d.getMonth() + 1).toString().padStart(2, '0');
+          const startIso = `${y}-${m}-01`;
+          const lastDay = new Date(y, d.getMonth() + 1, 0).getDate();
+          const endIso = `${y}-${m}-${lastDay.toString().padStart(2, '0')}`;
+          const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+          const label = `${months[d.getMonth()]} ${y.toString().slice(-2)}`;
+          const fullLabel = `${months[d.getMonth()]} ${y}`;
+          intervals.push({ id: `M_${y}_${m}`, label, fullLabel, startIso, endIso });
+        }
+      } else if (period === 'monthly_all') {
+        // Tout l'historique disponible
+        let earliest = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        [...deliveries, ...expenses].forEach(item => {
+          const dt = new Date(getItemDate(item));
+          if (!isNaN(dt.getTime()) && dt < earliest) {
+            earliest = new Date(dt.getFullYear(), dt.getMonth(), 1);
+          }
+        });
+
+        let cur = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+        while (cur <= now) {
+          const y = cur.getFullYear();
+          const m = (cur.getMonth() + 1).toString().padStart(2, '0');
+          const startIso = `${y}-${m}-01`;
+          const lastDay = new Date(y, cur.getMonth() + 1, 0).getDate();
+          const endIso = `${y}-${m}-${lastDay.toString().padStart(2, '0')}`;
+          const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+          const label = `${months[cur.getMonth()]} ${y.toString().slice(-2)}`;
+          const fullLabel = `${months[cur.getMonth()]} ${y}`;
+          intervals.push({ id: `M_${y}_${m}`, label, fullLabel, startIso, endIso });
+          cur.setMonth(cur.getMonth() + 1);
+        }
+      }
+
+      // Calcul par intervalle
+      const data = intervals.map(interval => {
+        let revenue = 0;
+        let fees = 0;
+        let expensesTotal = 0;
+
+        deliveries.forEach(d => {
+          const dIso = getItemDate(d);
+          if (dIso >= interval.startIso && dIso <= interval.endIso) {
+            revenue += (d.totalAmount || 0);
+            fees += (d.deliveryFee || 0);
+          }
+        });
+
+        expenses.forEach(e => {
+          const eIso = getItemDate(e);
+          if (eIso >= interval.startIso && eIso <= interval.endIso) {
+            expensesTotal += (e.amount || 0);
+          }
+        });
+
+        const net = revenue - fees - expensesTotal;
+        return {
+          ...interval,
+          revenue,
+          fees,
+          expenses: expensesTotal,
+          net
+        };
+      });
+
+      const periodRevenue = data.reduce((s, it) => s + it.revenue, 0);
+      const periodExpenses = data.reduce((s, it) => s + it.expenses, 0);
+      const periodFees = data.reduce((s, it) => s + it.fees, 0);
+      const periodNet = periodRevenue - periodFees - periodExpenses;
+      const periodMargin = periodRevenue > 0 ? ((periodNet / periodRevenue) * 100).toFixed(1) : 0;
+
+      return {
+        period,
+        metric,
+        intervals: data,
+        summary: {
+          periodRevenue,
+          periodExpenses,
+          periodNet,
+          periodMargin,
+          count: data.length,
+          avgNet: Math.round(periodNet / (data.length || 1)),
+          avgRevenue: Math.round(periodRevenue / (data.length || 1)),
+          avgExpenses: Math.round(periodExpenses / (data.length || 1))
+        }
+      };
+    }
+
+    function renderFinancialChartSvg(data, metric, chartType, selectedPointId) {
+      const intervals = data.intervals;
+      const count = intervals.length;
+      if (count === 0) return '';
+
+      const w = 500;
+      const h = 180;
+      const padLeft = 45;
+      const padRight = 15;
+      const padTop = 20;
+      const padBottom = 30;
+      const plotW = w - padLeft - padRight;
+      const plotH = h - padTop - padBottom;
+
+      let allVals = [];
+      intervals.forEach(it => {
+        if (metric === 'net') allVals.push(it.net);
+        else if (metric === 'revenue') allVals.push(it.revenue);
+        else if (metric === 'expenses') allVals.push(it.expenses);
+        else {
+          allVals.push(it.revenue, it.expenses, it.net);
+        }
+      });
+
+      let maxVal = Math.max(...allVals, 0);
+      let minVal = Math.min(...allVals, 0);
+
+      const hasData = intervals.some(it => it.revenue > 0 || it.expenses > 0);
+
+      if (maxVal === 0 && minVal === 0) {
+        maxVal = 10000;
+        minVal = 0;
+      } else {
+        maxVal = Math.ceil(maxVal * 1.15);
+        if (minVal < 0) minVal = Math.floor(minVal * 1.15);
+      }
+
+      const range = (maxVal - minVal) || 1;
+      const getY = (val) => padTop + plotH - ((val - minVal) / range) * plotH;
+      const zeroY = getY(0);
+
+      // Lignes de repère
+      const gridSteps = 3;
+      let gridLines = '';
+      for (let i = 0; i <= gridSteps; i++) {
+        const v = minVal + (range / gridSteps) * i;
+        const y = getY(v);
+        const label = v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : (v >= 1000 ? `${Math.round(v/1000)}k` : `${Math.round(v)}`);
+        gridLines += `
+          <line x1="${padLeft}" y1="${y}" x2="${w - padRight}" y2="${y}" stroke="#223a22" stroke-dasharray="3,3" stroke-width="1"/>
+          <text x="${padLeft - 6}" y="${y + 3}" fill="#6b8e6b" font-size="9" text-anchor="end" font-family="sans-serif">${label}</text>
+        `;
+      }
+
+      let chartContent = '';
+      const slotW = plotW / count;
+
+      if (!hasData) {
+        // Message doux quand tout est à zéro (état vierge)
+        chartContent += `
+          <text x="${w/2}" y="${h/2 - 6}" fill="#7bc67e" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">🌱 Période Vierge Prête</text>
+          <text x="${w/2}" y="${h/2 + 10}" fill="#888888" font-size="9.5" text-anchor="middle" font-family="sans-serif">Vos ventes & dépenses s'afficheront ici automatiquement</text>
+        `;
+      } else if (chartType === 'bar') {
+        intervals.forEach((it, idx) => {
+          const centerX = padLeft + idx * slotW + slotW / 2;
+          const isSelected = selectedPointId === it.id;
+
+          if (metric === 'combined') {
+            const subW = Math.max(2, (slotW * 0.75) / 3);
+            const yRev = getY(Math.max(0, it.revenue));
+            const hRev = Math.max(it.revenue > 0 ? 2 : 0, zeroY - yRev);
+            const yExp = getY(Math.max(0, it.expenses));
+            const hExp = Math.max(it.expenses > 0 ? 2 : 0, zeroY - yExp);
+            const yNet = it.net >= 0 ? getY(it.net) : zeroY;
+            const hNet = Math.max(it.net !== 0 ? 2 : 0, Math.abs(zeroY - getY(it.net)));
+
+            chartContent += `
+              <g onclick="selectDashboardChartPoint('${it.id}')" style="cursor: pointer;">
+                <rect x="${padLeft + idx * slotW}" y="${padTop}" width="${slotW}" height="${plotH}" fill="transparent"/>
+                <rect x="${centerX - subW * 1.5}" y="${yRev}" width="${subW - 1}" height="${hRev}" fill="#4a9e4e" rx="1" opacity="${isSelected ? '1' : '0.8'}"/>
+                <rect x="${centerX - subW * 0.5}" y="${yExp}" width="${subW - 1}" height="${hExp}" fill="#e07a7a" rx="1" opacity="${isSelected ? '1' : '0.8'}"/>
+                <rect x="${centerX + subW * 0.5}" y="${yNet}" width="${subW - 1}" height="${hNet}" fill="${it.net >= 0 ? '#7bc67e' : '#e07a7a'}" rx="1" opacity="${isSelected ? '1' : '0.9'}"/>
+              </g>
+            `;
+          } else {
+            let val = metric === 'revenue' ? it.revenue : (metric === 'expenses' ? it.expenses : it.net);
+            const barW = Math.max(3, Math.min(22, slotW * 0.65));
+            let barY, barH, color;
+
+            if (metric === 'expenses') {
+              color = '#e07a7a';
+              barY = getY(val);
+              barH = Math.max(val > 0 ? 3 : 0, zeroY - barY);
+            } else if (metric === 'revenue') {
+              color = '#4a9e4e';
+              barY = getY(val);
+              barH = Math.max(val > 0 ? 3 : 0, zeroY - barY);
+            } else {
+              color = val >= 0 ? '#7bc67e' : '#e07a7a';
+              barY = val >= 0 ? getY(val) : zeroY;
+              barH = Math.max(val !== 0 ? 3 : 0, Math.abs(zeroY - getY(val)));
+            }
+
+            chartContent += `
+              <g onclick="selectDashboardChartPoint('${it.id}')" style="cursor: pointer;">
+                <rect x="${padLeft + idx * slotW}" y="${padTop}" width="${slotW}" height="${plotH}" fill="transparent"/>
+                <rect x="${centerX - barW / 2}" y="${barY}" width="${barW}" height="${barH}" fill="${color}" rx="2" opacity="${isSelected ? '1' : '0.85'}" ${isSelected ? 'stroke="#ffffff" stroke-width="1.5"' : ''}/>
+                ${isSelected && val !== 0 ? `<circle cx="${centerX}" cy="${barY}" r="3" fill="#ffffff"/>` : ''}
+              </g>
+            `;
+          }
+
+          const step = count > 20 ? 5 : (count > 10 ? 2 : 1);
+          if (idx % step === 0 || idx === count - 1) {
+            chartContent += `
+              <text x="${centerX}" y="${h - 8}" fill="${isSelected ? '#ffffff' : '#888888'}" font-size="8.5" font-weight="${isSelected ? 'bold' : 'normal'}" text-anchor="middle" font-family="sans-serif">${it.label}</text>
+            `;
+          }
+        });
+      } else {
+        // Courbe continue (Spline)
+        const points = intervals.map((it, idx) => {
+          const x = padLeft + idx * slotW + slotW / 2;
+          let val = metric === 'revenue' ? it.revenue : (metric === 'expenses' ? it.expenses : it.net);
+          const y = getY(val);
+          return { x, y, val, id: it.id, label: it.label };
+        });
+
+        let mainColor = metric === 'expenses' ? '#e07a7a' : (metric === 'revenue' ? '#4a9e4e' : '#7bc67e');
+
+        let pathD = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 0; i < points.length - 1; i++) {
+          const p0 = points[i];
+          const p1 = points[i + 1];
+          const cpx1 = p0.x + (p1.x - p0.x) / 2;
+          const cpy1 = p0.y;
+          const cpx2 = p0.x + (p1.x - p0.x) / 2;
+          const cpy2 = p1.y;
+          pathD += ` C ${cpx1} ${cpy1}, ${cpx2} ${cpy2}, ${p1.x} ${p1.y}`;
+        }
+
+        const areaD = `${pathD} L ${points[points.length - 1].x} ${zeroY} L ${points[0].x} ${zeroY} Z`;
+
+        chartContent += `
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="${mainColor}" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="${mainColor}" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+          <path d="${areaD}" fill="url(#chartGrad)"/>
+          <path d="${pathD}" fill="none" stroke="${mainColor}" stroke-width="2.5" stroke-linecap="round"/>
+        `;
+
+        points.forEach((pt, idx) => {
+          const isSelected = selectedPointId === pt.id;
+          chartContent += `
+            <g onclick="selectDashboardChartPoint('${pt.id}')" style="cursor: pointer;">
+              <circle cx="${pt.x}" cy="${pt.y}" r="12" fill="transparent"/>
+              <circle cx="${pt.x}" cy="${pt.y}" r="${isSelected ? '5' : '3'}" fill="${mainColor}" stroke="#142214" stroke-width="1.5"/>
+              ${isSelected ? `<circle cx="${pt.x}" cy="${pt.y}" r="7" fill="none" stroke="#ffffff" stroke-width="1.5" class="animate-ping"/>` : ''}
+            </g>
+          `;
+
+          const step = count > 20 ? 5 : (count > 10 ? 2 : 1);
+          if (idx % step === 0 || idx === count - 1) {
+            chartContent += `
+              <text x="${pt.x}" y="${h - 8}" fill="${isSelected ? '#ffffff' : '#888888'}" font-size="8.5" font-weight="${isSelected ? 'bold' : 'normal'}" text-anchor="middle" font-family="sans-serif">${pt.label}</text>
+            `;
+          }
+        });
+      }
+
+      const zeroLine = `<line x1="${padLeft}" y1="${zeroY}" x2="${w - padRight}" y2="${zeroY}" stroke="#3e6b3e" stroke-width="1.2"/>`;
+
+      return `
+        <svg viewBox="0 0 ${w} ${h}" class="w-full h-auto select-none overflow-visible">
+          ${gridLines}
+          ${zeroLine}
+          ${chartContent}
+        </svg>
+      `;
+    }
+
+    function exportFinancialReport() {
+      const data = getPeriodicFinancialData(dashboardPeriod, dashboardMetric);
+      const s = data.summary;
+      const periodLabel = dashboardPeriod === 'daily_30d' ? '30 Derniers Jours (Journalier)' :
+        (dashboardPeriod === 'weekly_12w' ? '3 Derniers Mois (Hebdomadaire)' :
+        (dashboardPeriod === 'monthly_12m' ? '12 Derniers Mois (Mensuel)' : 'Historique Complet'));
+
+      const reportWindow = window.open('', '_blank');
+      if (!reportWindow) {
+        alert("Veuillez autoriser les fenêtres contextuelles pour exporter le relevé.");
+        return;
+      }
+
+      reportWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Relevé Financier MycoTrack Pro - ${periodLabel}</title>
+          <style>
+            body { font-family: system-ui, sans-serif; padding: 24px; color: #111; max-width: 800px; margin: 0 auto; }
+            h1 { font-size: 20px; color: #1e3a1e; margin-bottom: 4px; }
+            .meta { font-size: 12px; color: #666; margin-bottom: 20px; }
+            .kpis { display: flex; gap: 12px; margin-bottom: 24px; }
+            .kpi { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #f9fbf9; }
+            .kpi p { margin: 0; font-size: 11px; color: #666; }
+            .kpi h2 { margin: 4px 0 0; font-size: 16px; color: #111; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
+            th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+            th { background: #f4f6f4; font-weight: bold; }
+            .text-right { text-align: right; }
+            .text-green { color: #2e7d32; font-weight: bold; }
+            .text-red { color: #c62828; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h1>🍄 MycoTrack Pro — Relevé Périodique</h1>
+            <button onclick="window.print()" style="padding: 6px 14px; background: #2e7d32; color: #fff; border:none; border-radius: 6px; cursor: pointer; font-weight: bold;">🖨️ Imprimer</button>
+          </div>
+          <p class="meta">Période : <strong>${periodLabel}</strong> • Exploitation : ${state.farm ? state.farm.name : 'MycoTrack Farm'} • Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+
+          <div class="kpis">
+            <div class="kpi">
+              <p>Chiffre d'Affaires</p>
+              <h2>${s.periodRevenue.toLocaleString()} DA</h2>
+            </div>
+            <div class="kpi">
+              <p>Dépenses d'Exploitation</p>
+              <h2 class="text-red">-${s.periodExpenses.toLocaleString()} DA</h2>
+            </div>
+            <div class="kpi">
+              <p>Bénéfice Net</p>
+              <h2 class="text-green">${s.periodNet.toLocaleString()} DA</h2>
+            </div>
+            <div class="kpi">
+              <p>Marge Nette</p>
+              <h2>${s.periodMargin}%</h2>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Intervalle</th>
+                <th class="text-right">Chiffre d'Affaires</th>
+                <th class="text-right">Dépenses</th>
+                <th class="text-right">Bénéfice Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.intervals.map(it => `
+                <tr>
+                  <td>${it.fullLabel || it.label}</td>
+                  <td class="text-right">${it.revenue.toLocaleString()} DA</td>
+                  <td class="text-right text-red">-${it.expenses.toLocaleString()} DA</td>
+                  <td class="text-right text-green">${it.net.toLocaleString()} DA</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `);
+      reportWindow.document.close();
+    }
+
     function renderDashboardView() {
       if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
         switchTab('production');
@@ -939,59 +1381,169 @@
           </div>
         </div>
 
-        <!-- Alerte active si commande en cours ou impayé -->
-        ${pendingDeliveries.length > 0 || totalRemainingDue > 0 || lowStocks.length > 0 ? `
-          <div class="mt-2 space-y-1.5">
-            <h2 class="text-xs font-bold text-[#e0b87a] tracking-wider uppercase flex items-center gap-1.5">
-              <span>⚠️</span> <span>SUIVI OPÉRATIONNEL & CRÉDITS</span>
-            </h2>
 
-            ${pendingDeliveries.map(d => `
-              <div class="bg-[#1f2a1a] p-2.5 rounded-xl border border-[#4a9e4e]/40 text-xs flex justify-between items-center">
+        <!-- ANALYTIQUE FINANCIÈRE PÉRIODIQUE (GRAPHIQUES INTERACTIFS MULTI-VUES) -->
+        ${(() => {
+          const pData = getPeriodicFinancialData(dashboardPeriod, dashboardMetric);
+          const s = pData.summary;
+
+          let chartSummaryTitle = "Bénéfice Net de la Période";
+          let chartSummaryValue = `${s.periodNet.toLocaleString()} DA`;
+          let chartSummaryColor = s.periodNet >= 0 ? "text-[#7bc67e]" : "text-[#e07a7a]";
+          let chartSummarySub = `Marge nette : ${s.periodMargin}%`;
+          let chartAvgText = `${s.avgNet.toLocaleString()} DA / int.`;
+
+          if (dashboardMetric === 'revenue') {
+            chartSummaryTitle = "Chiffre d'Affaires Brut";
+            chartSummaryValue = `${s.periodRevenue.toLocaleString()} DA`;
+            chartSummaryColor = "text-[#4a9e4e]";
+            chartSummarySub = `Total des ventes encaissées`;
+            chartAvgText = `${s.avgRevenue.toLocaleString()} DA / int.`;
+          } else if (dashboardMetric === 'expenses') {
+            chartSummaryTitle = "Dépenses d'Exploitation";
+            chartSummaryValue = `-${s.periodExpenses.toLocaleString()} DA`;
+            chartSummaryColor = "text-[#e07a7a]";
+            chartSummarySub = `Charges & achats réalisés`;
+            chartAvgText = `${s.avgExpenses.toLocaleString()} DA / int.`;
+          } else if (dashboardMetric === 'combined') {
+            chartSummaryTitle = "Synthèse Financière Comparée";
+            chartSummaryValue = `Net: ${s.periodNet.toLocaleString()} DA`;
+            chartSummaryColor = "text-[#e0b87a]";
+            chartSummarySub = `CA: ${s.periodRevenue.toLocaleString()} | Dép: ${s.periodExpenses.toLocaleString()}`;
+            chartAvgText = `Marge: ${s.periodMargin}%`;
+          }
+
+          // Point inspecté au toucher
+          let inspectorHtml = '';
+          const activePt = dashboardSelectedPointId ? pData.intervals.find(it => it.id === dashboardSelectedPointId) : null;
+          if (activePt) {
+            const ptMargin = activePt.revenue > 0 ? ((activePt.net / activePt.revenue) * 100).toFixed(1) : 0;
+            inspectorHtml = `
+              <div class="flex items-center justify-between">
                 <div>
-                  <p class="font-bold text-white flex items-center gap-1.5">
-                    <span class="font-mono text-[10px] text-[#7bc67e]">${d.orderNumber}</span>
-                    <span>• ${d.clientName} (${d.quantityKg} kg)</span>
-                  </p>
-                  <p class="text-[10px] text-[#aaa]">Livreur : <strong>${d.delivererName}</strong> • ${d.totalAmount.toLocaleString()} DA</p>
+                  <span class="text-white font-bold block">${activePt.fullLabel || activePt.label}</span>
+                  <span class="text-[9.5px] text-[#aaa]">Détails de l'intervalle sélectionné</span>
                 </div>
-                <div class="text-right">
-                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                    d.status === 'pending_acceptance' ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40' :
-                    (d.status === 'in_delivery' ? 'bg-blue-900/60 text-blue-300 border border-blue-500/40' : 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40')
-                  }">
-                    ${d.status === 'pending_acceptance' ? 'En attente livreur' : (d.status === 'in_delivery' ? 'En livraison' : 'Livré • Clôture')}
-                  </span>
-                  <button onclick="switchTab('sales')" class="block mt-1 text-[10px] text-[#7bc67e] underline text-right">Voir détails</button>
+                <div class="flex items-center gap-2 text-right">
+                  <div>
+                    <span class="text-[9px] text-[#888] block">C.A.</span>
+                    <strong class="text-[#4a9e4e]">${activePt.revenue.toLocaleString()} DA</strong>
+                  </div>
+                  <div>
+                    <span class="text-[9px] text-[#888] block">Dépenses</span>
+                    <strong class="text-[#e07a7a]">-${activePt.expenses.toLocaleString()} DA</strong>
+                  </div>
+                  <div>
+                    <span class="text-[9px] text-[#888] block">Bénéfice Net</span>
+                    <strong class="${activePt.net >= 0 ? 'text-[#7bc67e]' : 'text-[#e07a7a]'}">${activePt.net.toLocaleString()} DA</strong>
+                  </div>
                 </div>
               </div>
-            `).join('')}
-
-            ${state.clients.filter(c => c.due > 0).map(c => `
-              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e0b87a] flex justify-between items-center">
-                <div>
-                  <p class="font-bold">🔴 Reste à payer client : ${c.name}</p>
-                  <p class="text-[10px] text-[#aaa]">Montant dû : <strong>${c.due.toLocaleString()} DA</strong></p>
-                </div>
-                <a href="tel:${c.phone}" class="px-2.5 py-1 bg-[#3a2e1a] text-[#e0b87a] border border-[#e0b87a]/40 rounded-lg text-[10px] font-bold">
-                  📞 Relancer
-                </a>
+            `;
+          } else {
+            inspectorHtml = `
+              <div class="flex items-center justify-between text-[#888]">
+                <span>🔍 Touchez une barre ou un point du graphique pour inspecter le détail</span>
+                <span class="text-[#7bc67e] text-[9.5px] font-bold">Interactif</span>
               </div>
-            `).join('')}
+            `;
+          }
 
-            ${lowStocks.map(s => `
-              <div class="bg-[#2a1a1a] p-2.5 rounded-xl border border-[#5a2a2a] text-xs text-[#e07a7a] flex justify-between items-center">
-                <div>
-                  <p class="font-bold">🔴 Stock critique : ${s.name}</p>
-                  <p class="text-[10px] text-[#aaa]">Reste <strong>${s.quantity} ${s.unit}</strong> (seuil alerte : ${s.threshold} ${s.unit})</p>
+          const chartSvgHtml = renderFinancialChartSvg(pData, dashboardMetric, dashboardChartType, dashboardSelectedPointId);
+
+          return `
+            <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2.5 mt-1 select-none">
+              <!-- En-tête : Titre + Switcher Barres / Courbe -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm">📈</span>
+                  <div>
+                    <h3 class="text-xs font-bold text-white tracking-wide">ÉVOLUTION FINANCIÈRE</h3>
+                    <p class="text-[9px] text-[#888]">Graphiques périodiques paramétrables</p>
+                  </div>
                 </div>
-                <button onclick="switchTab('stock', 'stocks')" class="px-2 py-0.5 bg-[#4a9e4e] text-white rounded text-[10px] font-bold">
-                  Stock
+
+                <!-- Bascule Barres / Courbe -->
+                <div class="flex items-center bg-[#0a120a] p-0.5 rounded-lg border border-[#2d4a2d] text-[10px]">
+                  <button onclick="setDashboardChartType('bar')" class="px-2 py-0.5 rounded font-bold transition-all ${dashboardChartType === 'bar' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+                    📊 Barres
+                  </button>
+                  <button onclick="setDashboardChartType('area')" class="px-2 py-0.5 rounded font-bold transition-all ${dashboardChartType === 'area' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+                    📈 Courbe
+                  </button>
+                </div>
+              </div>
+
+              <!-- 1. SÉLECTEUR DE MÉTRIQUE (CHOISIR PRÉCISÉMENT QUOI AFFICHER SANS ENCOMBRER) -->
+              <div class="flex bg-[#0a120a] p-1 rounded-xl border border-[#2d4a2d] text-[10.5px]">
+                <button onclick="setDashboardMetric('net')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${dashboardMetric === 'net' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/60 shadow' : 'text-[#888] hover:text-white'}">
+                  ✨ Bénéfice Net
+                </button>
+                <button onclick="setDashboardMetric('revenue')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${dashboardMetric === 'revenue' ? 'bg-[#1a331a] text-[#4a9e4e] border border-[#4a9e4e]/60 shadow' : 'text-[#888] hover:text-white'}">
+                  💰 C.A.
+                </button>
+                <button onclick="setDashboardMetric('expenses')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${dashboardMetric === 'expenses' ? 'bg-[#331a1a] text-[#e07a7a] border border-[#e07a7a]/60 shadow' : 'text-[#888] hover:text-white'}">
+                  📉 Dépenses
+                </button>
+                <button onclick="setDashboardMetric('combined')" class="flex-1 py-1.5 rounded-lg font-bold transition-all text-center ${dashboardMetric === 'combined' ? 'bg-[#223322] text-[#e0b87a] border border-[#e0b87a]/60 shadow' : 'text-[#888] hover:text-white'}">
+                  📊 Comparatif
                 </button>
               </div>
-            `).join('')}
-          </div>
-        ` : ''}
+
+              <!-- 2. SÉLECTEUR DE PÉRIODE (JOURNALIER, HEBDO, MENSUEL, TOUT) -->
+              <div class="flex bg-[#0a120a] p-0.5 rounded-xl border border-[#2d4a2d] text-[10px]">
+                <button onclick="setDashboardPeriod('daily_30d')" class="flex-1 py-1 rounded-lg font-semibold transition-all text-center ${dashboardPeriod === 'daily_30d' ? 'bg-[#2d4a2d] text-white font-bold' : 'text-[#888] hover:text-white'}">
+                  🗓️ 30 Jours
+                </button>
+                <button onclick="setDashboardPeriod('weekly_12w')" class="flex-1 py-1 rounded-lg font-semibold transition-all text-center ${dashboardPeriod === 'weekly_12w' ? 'bg-[#2d4a2d] text-white font-bold' : 'text-[#888] hover:text-white'}">
+                  📅 3 Mois (Hebdo)
+                </button>
+                <button onclick="setDashboardPeriod('monthly_12m')" class="flex-1 py-1 rounded-lg font-semibold transition-all text-center ${dashboardPeriod === 'monthly_12m' ? 'bg-[#2d4a2d] text-white font-bold' : 'text-[#888] hover:text-white'}">
+                  📆 12 Mois
+                </button>
+                <button onclick="setDashboardPeriod('monthly_all')" class="flex-1 py-1 rounded-lg font-semibold transition-all text-center ${dashboardPeriod === 'monthly_all' ? 'bg-[#2d4a2d] text-white font-bold' : 'text-[#888] hover:text-white'}">
+                  🏛️ Historique
+                </button>
+              </div>
+
+              <!-- 3. CARTE SYNTHÈSE DE LA PÉRIODE CHOISIE -->
+              <div class="bg-[#0a120a] p-2.5 rounded-xl border border-[#2d4a2d] flex items-center justify-between">
+                <div>
+                  <span class="text-[10px] text-[#888] block uppercase tracking-wider">${chartSummaryTitle}</span>
+                  <div class="flex items-baseline gap-2 mt-0.5">
+                    <span class="text-base font-extrabold ${chartSummaryColor}">${chartSummaryValue}</span>
+                    <span class="text-[10px] text-[#aaa] font-medium">${chartSummarySub}</span>
+                  </div>
+                </div>
+                <div class="text-right text-[10px] text-[#888] space-y-0.5">
+                  <div>Moyenne : <strong class="text-white">${chartAvgText}</strong></div>
+                  <div>Marge nette : <strong class="text-[#7bc67e]">${s.periodMargin}%</strong></div>
+                </div>
+              </div>
+
+              <!-- 4. LE GRAPHIQUE SVG HAUTE DÉFINITION -->
+              <div class="bg-[#0a120a] p-2 rounded-xl border border-[#2d4a2d] overflow-hidden">
+                ${chartSvgHtml}
+              </div>
+
+              <!-- 5. INSPECTEUR CONTEXTUEL AU TOUCHER -->
+              <div class="bg-[#0e170e] p-2 rounded-xl border border-[#2d4a2d] text-[10.5px]">
+                ${inspectorHtml}
+              </div>
+
+              <!-- 6. OUTILS & OPTIONS SUPPLÉMENTAIRES -->
+              <div class="pt-1 flex items-center justify-between text-[10px] text-[#aaa]">
+                <button onclick="exportFinancialReport()" class="px-2.5 py-1 bg-[#1a2a1a] hover:bg-[#2d4a2d] text-[#7bc67e] border border-[#2d4a2d] rounded-lg font-bold flex items-center gap-1 transition-all">
+                  <span>📄</span> <span>Exporter le Relevé</span>
+                </button>
+                <div class="flex items-center gap-2">
+                  <span class="text-[9px] text-[#7bc67e] font-mono">● Mode Réel</span>
+                  <span class="text-[9px] text-[#666]">Données synchronisées</span>
+                </div>
+              </div>
+            </div>
+          `;
+        })()}
 
         <!-- Modules Raccourcis -->
         <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase mt-2 mb-1">MODULES DE GESTION</h2>
@@ -1780,7 +2332,7 @@
         <div class="space-y-3">
           ${pendingDeliveries.length === 0 ? `
             <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
-              <span class="text-3xl">🛵</span>
+              <span class="text-2xl">🛵</span>
               <p class="text-xs text-[#888] mt-2">Aucune course en attente.</p>
               <p class="text-[10px] text-[#666]">Les nouvelles commandes s'afficheront ici en direct.</p>
             </div>
@@ -2015,7 +2567,7 @@
           <div class="space-y-2.5 mt-2">
             ${deliverers.length === 0 ? `
               <div class="bg-[#1a2a1a] p-8 text-center rounded-2xl border border-[#2d4a2d]">
-                <span class="text-3xl">🛵</span>
+                <span class="text-2xl">🛵</span>
                 <p class="text-xs text-[#888] mt-2">Aucun livreur enregistré dans votre flotte.</p>
                 <button onclick="openNewDelivererModal()" class="mt-3 px-3 py-1.5 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">+ Ajouter un Livreur</button>
               </div>
@@ -3749,7 +4301,7 @@
         const farmName = (state.farm && state.farm.name) || 'votre exploitation';
         return `
           <div class="text-center py-10 bg-[#142214] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-3.5 shadow-lg">
-            <span class="text-4xl block">🍄</span>
+            <span class="text-2xl block">🍄</span>
             <div>
               <h3 class="text-sm font-bold text-white">Bienvenue sur ${farmName} !</h3>
               <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">Votre espace de production est prêt</p>
@@ -3917,7 +4469,7 @@
       if (archivedTables.length === 0) {
         return `
           <div class="text-center py-10 bg-[#1a2a1a] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-2">
-            <span class="text-3xl block">📦</span>
+            <span class="text-2xl block">📦</span>
             <h3 class="text-sm font-bold text-white">Aucune table archivée</h3>
             <p class="text-xs text-[#888] max-w-xs mx-auto">Lorsque vous avez terminé les 3 volées d'une table, archivez-la pour garder votre écran propre tout en préservant vos chiffres.</p>
           </div>
@@ -6772,7 +7324,7 @@
         <div class="max-w-md mx-auto space-y-4 pb-8 select-none">
           <!-- Logo & En-tête -->
           <div class="text-center pt-3 pb-1 space-y-1.5">
-            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#142214] border-2 border-[#7bc67e] shadow-lg shadow-[#4a9e4e]/20 text-3xl">
+            <div class="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-[#142214] border-2 border-[#7bc67e] shadow-md shadow-[#4a9e4e]/20 text-2xl">
               🍄
             </div>
             <div>
@@ -6807,7 +7359,7 @@
             <!-- Bouton Téléchargement Direct APK Android -->
             <a href="MycoTrackPro.apk" download="MycoTrackPro.apk" class="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#142214] to-[#1f3a1f] border border-[#4a9e4e]/60 hover:border-[#7bc67e] transition-all group shadow-md cursor-pointer">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-[#4a9e4e]/20 border border-[#4a9e4e]/40 flex items-center justify-center text-xl">
+                <div class="w-8 h-8 rounded-lg bg-[#4a9e4e]/20 border border-[#4a9e4e]/40 flex items-center justify-center text-base">
                   🤖
                 </div>
                 <div class="text-left">
@@ -6852,7 +7404,7 @@
 
       container.innerHTML = `
         <div class="max-w-md mx-auto space-y-4 pt-6 pb-8 text-center select-none">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-amber-950/40 border-2 border-amber-500/60 shadow-lg text-3xl">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-950/40 border border-amber-500/60 shadow text-2xl">
             ⏳
           </div>
           <div>
