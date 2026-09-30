@@ -610,6 +610,106 @@
       state.farm = state.farms[0] || initialSeedState.farm;
     }
 
+    // Registre multi-fermes avec isolation hermétique des données par exploitation
+    if (!state.farmsData) {
+      state.farmsData = {};
+    }
+    const demoFarmId = (initialSeedState.farm && initialSeedState.farm.id) ? initialSeedState.farm.id : 'farm_01';
+    if (!state.farmsData[demoFarmId]) {
+      state.farmsData[demoFarmId] = {
+        farm: initialSeedState.farm,
+        users: JSON.parse(JSON.stringify(initialSeedState.users)),
+        notifications: JSON.parse(JSON.stringify(initialSeedState.notifications)),
+        deliverers: JSON.parse(JSON.stringify(initialSeedState.deliverers)),
+        clients: JSON.parse(JSON.stringify(initialSeedState.clients)),
+        deliveries: JSON.parse(JSON.stringify(initialSeedState.deliveries)),
+        strains: JSON.parse(JSON.stringify(initialSeedState.strains)),
+        stocks: JSON.parse(JSON.stringify(initialSeedState.stocks)),
+        tables: JSON.parse(JSON.stringify(initialSeedState.tables)),
+        batches: JSON.parse(JSON.stringify(initialSeedState.batches)),
+        bags: JSON.parse(JSON.stringify(initialSeedState.bags)),
+        units: JSON.parse(JSON.stringify(initialSeedState.units)),
+        expenseCategories: JSON.parse(JSON.stringify(initialSeedState.expenseCategories)),
+        expenses: JSON.parse(JSON.stringify(initialSeedState.expenses))
+      };
+    }
+
+    function initFarmsDataIfNeeded() {
+      if (!state.farmsData) state.farmsData = {};
+      const fId = (state.farm && state.farm.id) ? state.farm.id : 'farm_01';
+      if (!state.farmsData[fId]) {
+        saveCurrentFarmData();
+      }
+    }
+
+    function saveCurrentFarmData() {
+      if (!state.farm || !state.farm.id) return;
+      if (!state.farmsData) state.farmsData = {};
+      state.farmsData[state.farm.id] = {
+        farm: state.farm,
+        users: state.users || [],
+        notifications: state.notifications || [],
+        deliverers: state.deliverers || [],
+        clients: state.clients || [],
+        deliveries: state.deliveries || [],
+        strains: state.strains || initialSeedState.strains,
+        stocks: state.stocks || [],
+        tables: state.tables || [],
+        batches: state.batches || [],
+        bags: state.bags || [],
+        units: state.units || initialSeedState.units,
+        expenseCategories: state.expenseCategories || initialSeedState.expenseCategories,
+        expenses: state.expenses || []
+      };
+    }
+
+    function loadFarmData(farmId) {
+      if (!state.farmsData) state.farmsData = {};
+      const fData = state.farmsData[farmId] || state.farmsData['farm_01'];
+      if (!fData) return;
+
+      state.farm = fData.farm;
+      state.users = fData.users || [];
+      state.notifications = fData.notifications || [];
+      state.deliverers = fData.deliverers || [];
+      state.clients = fData.clients || [];
+      state.deliveries = fData.deliveries || [];
+      state.strains = fData.strains || initialSeedState.strains;
+      state.stocks = fData.stocks || [];
+      state.tables = fData.tables || [];
+      state.batches = fData.batches || [];
+      state.bags = fData.bags || [];
+      state.units = fData.units || initialSeedState.units;
+      state.expenseCategories = fData.expenseCategories || initialSeedState.expenseCategories;
+      state.expenses = fData.expenses || [];
+    }
+
+    function switchActiveFarm(farmId, targetUser = null) {
+      saveCurrentFarmData();
+      loadFarmData(farmId);
+
+      if (targetUser) {
+        state.currentUser = targetUser;
+      } else if (state.currentUser && (state.users || []).some(u => u.id === state.currentUser.id)) {
+        state.currentUser = state.users.find(u => u.id === state.currentUser.id);
+      } else {
+        state.currentUser = (state.users || []).find(u => u.role === 'admin') || (state.users || [])[0] || null;
+      }
+
+      if (state.currentUser) {
+        currentRole = state.currentUser.role || 'admin';
+        currentTab = currentRole === 'culture' ? 'production' : (currentRole === 'delivery' ? 'delivery' : 'dashboard');
+        localStorage.setItem('mycotrack_session_active', 'true');
+        localStorage.setItem('mycotrack_saved_user_id', state.currentUser.id);
+        setRole(currentRole);
+      } else {
+        renderAuthLandingPage();
+      }
+
+      saveState();
+      showToast(`Espace actif : ${state.farm.name}`);
+    }
+
     // Migration et injection garantie des 3 profils démo fondamentaux (Moura, Samir, Yacine)
     if (!state.users || state.users.length === 0) {
       state.users = JSON.parse(JSON.stringify(initialSeedState.users));
@@ -642,6 +742,7 @@
     }
 
     function saveState() {
+      saveCurrentFarmData();
       localStorage.setItem('mycotrack_state_v8', JSON.stringify(state));
       localStorage.setItem('mycotrack_state_v7', JSON.stringify(state));
       checkBadges();
@@ -3862,14 +3963,22 @@
 
     function renderWeeksProductionViewHtml(activeWeeks) {
       if (activeWeeks.length === 0) {
+        const farmName = (state.farm && state.farm.name) || 'votre exploitation';
         return `
-          <div class="text-center py-10 bg-[#1a2a1a] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-3">
-            <span class="text-3xl block">🌾</span>
-            <h3 class="text-sm font-bold text-white">Aucune table active</h3>
-            <p class="text-xs text-[#888] max-w-xs mx-auto">Créez votre première table pour lancer la production d'une semaine.</p>
-            <button onclick="openNewTableModal()" class="px-4 py-2 bg-[#4a9e4e] text-white text-xs font-bold rounded-xl shadow">
-              + Créer une Table
-            </button>
+          <div class="text-center py-10 bg-[#142214] rounded-2xl border border-dashed border-[#2d4a2d] p-6 space-y-3.5 shadow-lg">
+            <span class="text-4xl block">🍄</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">Bienvenue sur ${farmName} !</h3>
+              <p class="text-xs text-[#7bc67e] font-semibold mt-0.5">Votre espace de production est prêt</p>
+            </div>
+            <p class="text-xs text-[#888] max-w-sm mx-auto leading-relaxed">
+              Aucune table active pour le moment. Lancez votre première pasteurisation et ensemencement en créant une table de culture.
+            </p>
+            <div class="pt-1">
+              <button onclick="openNewTableModal()" class="px-5 py-2.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-[#4a9e4e]/20 inline-flex items-center gap-2 transition-all">
+                <span>➕</span> <span>Créer ma Première Table</span>
+              </button>
+            </div>
           </div>
         `;
       }
@@ -6547,6 +6656,31 @@
             </div>
           </div>
 
+          <!-- Sélecteur d'Exploitation (Multi-Fermes SaaS) -->
+          ${(state.farms && state.farms.length > 1) ? `
+            <div class="bg-[#1a2a1a] p-3 rounded-2xl border border-[#2d4a2d] space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-white font-bold text-xs flex items-center gap-1.5">
+                  <span>🏢</span> <span>Vos Exploitations (Multi-Fermes SaaS) :</span>
+                </label>
+                <span class="text-[9px] text-[#7bc67e] font-semibold">${state.farms.length} fermes</span>
+              </div>
+              <div class="space-y-1.5">
+                ${state.farms.map(f => `
+                  <button onclick="closeModal(); switchActiveFarm('${f.id}');" class="w-full p-2.5 rounded-xl border text-left flex justify-between items-center transition-all ${state.farm.id === f.id ? 'bg-[#1f3a1f] border-[#7bc67e] text-white font-bold shadow' : 'bg-[#0f1a0f] border-[#2d4a2d] text-slate-300 hover:border-[#7bc67e]/50'}">
+                    <div>
+                      <span class="text-xs font-bold block">${f.name}</span>
+                      <span class="text-[10px] text-[#888]">Code: ${f.inviteCode}</span>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded font-bold ${state.farm.id === f.id ? 'bg-[#4a9e4e] text-white' : 'bg-[#142214] text-[#7bc67e] border border-[#2d4a2d]'}">
+                      ${state.farm.id === f.id ? '● Actif' : 'Basculer ➔'}
+                    </span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Actions Rapides SaaS Multi-Fermes & Équipe -->
           <div class="space-y-1.5 pt-1">
             <button onclick="closeModal(); setAuthTab('create'); logoutUser();" class="w-full py-2 bg-[#142214] hover:bg-[#1f3a1f] border border-[#2d4a2d] hover:border-[#7bc67e] text-[#7bc67e] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
@@ -6578,11 +6712,23 @@
 
     function switchCurrentUser(userId) {
       let user = (state.users || []).find(u => u.id === userId);
+      if (!user && state.farmsData) {
+        for (const fId of Object.keys(state.farmsData)) {
+          const u = (state.farmsData[fId].users || []).find(x => x.id === userId);
+          if (u) {
+            user = u;
+            switchActiveFarm(fId, user);
+            closeModal();
+            return;
+          }
+        }
+      }
       if (!user) {
         user = (initialSeedState.users || []).find(u => u.id === userId);
         if (user) {
-          if (!state.users) state.users = [];
-          state.users.push({ ...user });
+          switchActiveFarm('farm_01', user);
+          closeModal();
+          return;
         }
       }
       if (!user) return;
@@ -6711,28 +6857,28 @@
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom de l'Exploitation / Ferme *</label>
-              <input id="portal-create-farm-name" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white text-xs font-bold focus:outline-none" placeholder="ex: Champignons Bio des Aurès" value="Ferme Pleurotes de Moura">
+              <input id="portal-create-farm-name" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white text-xs font-bold focus:outline-none" placeholder="ex: Champignons Bio des Aurès" value="">
             </div>
 
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom du Gérant *</label>
-                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Moura" value="Moura">
+                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Karim" value="">
               </div>
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile Gérant</label>
-                <input id="portal-create-owner-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="0550000001" value="0550000001">
+                <input id="portal-create-owner-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550123456" value="">
               </div>
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Email Gérant *</label>
-              <input id="portal-create-owner-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="moura@ferme.dz" value="moura@ferme.dz">
+              <input id="portal-create-owner-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: contact@ma-ferme.dz" value="">
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Mot de passe Administrateur *</label>
-              <input id="portal-create-owner-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="••••••••" value="password123">
+              <input id="portal-create-owner-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="••••••••" value="">
             </div>
 
             <button onclick="submitCreateFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
@@ -6755,9 +6901,7 @@
                   <span>📱 Téléphone mobile OU 📧 Email</span>
                   <span class="text-[10px] text-[#7bc67e] font-normal">Algérie (+213)</span>
                 </label>
-                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550000001 ou 0661112233" value="0550000001">
-                <!-- Fallback invisible pour compatibilité des tests existants -->
-                <input id="auth-login-email" type="hidden" value="moura@ferme.dz">
+                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550000001 ou 0661112233" value="">
               </div>
 
               <div>
@@ -6765,9 +6909,7 @@
                   <span>🔒 Mot de passe (Admin) ou PIN 4 chiffres (Équipe)</span>
                   <span class="text-[10px] text-[#888]">Ouvrier & Livreur : 4 chiffres</span>
                 </label>
-                <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="password123">
-                <!-- Fallback invisible pour compatibilité des tests existants -->
-                <input id="auth-login-password" type="hidden" value="password123">
+                <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="">
               </div>
               
               <div class="flex items-center justify-between text-[11px] pt-1 text-[#888]">
@@ -6931,11 +7073,20 @@
 
     function loginDirectUser(userId) {
       let user = (state.users || []).find(u => u.id === userId);
+      if (!user && state.farmsData) {
+        for (const fId of Object.keys(state.farmsData)) {
+          const u = (state.farmsData[fId].users || []).find(x => x.id === userId);
+          if (u) {
+            switchActiveFarm(fId, u);
+            return;
+          }
+        }
+      }
       if (!user) {
-        user = (initialSeedState.users || []).find(u => u.id === userId);
-        if (user) {
-          if (!state.users) state.users = [];
-          state.users.push({ ...user });
+        const seedU = (initialSeedState.users || []).find(u => u.id === userId);
+        if (seedU) {
+          switchActiveFarm('farm_01', seedU);
+          return;
         }
       }
       if (!user) return;
@@ -6973,7 +7124,8 @@
       const isEmail = rawIdent.includes('@');
       const lowerEmail = rawIdent.toLowerCase();
 
-      let user = (state.users || []).find(u => {
+      function matchUser(u) {
+        if (!u) return false;
         if (isEmail && u.email && u.email.toLowerCase() === lowerEmail) return true;
         if (u.phone) {
           const uDigits = u.phone.replace(/\D/g, '');
@@ -6984,24 +7136,42 @@
         }
         if (u.id === rawIdent || (u.email && u.email.toLowerCase() === lowerEmail)) return true;
         return false;
-      });
+      }
 
+      let user = null;
+      let targetFarmId = state.farm ? state.farm.id : 'farm_01';
+
+      // 1. Chercher dans la ferme active
+      user = (state.users || []).find(matchUser);
+
+      // 2. Si non trouvé, chercher dans toutes les fermes enregistrées
+      if (!user && state.farmsData) {
+        for (const fId of Object.keys(state.farmsData)) {
+          const u = (state.farmsData[fId].users || []).find(matchUser);
+          if (u) {
+            user = u;
+            targetFarmId = fId;
+            break;
+          }
+        }
+      }
+
+      // 3. Fallback sur profils démo initiaux
       if (!user) {
-        // Fallback de secours sur profils initiaux
-        const fallback = (initialSeedState.users || []).find(u => {
-          if (isEmail && u.email && u.email.toLowerCase() === lowerEmail) return true;
-          if (u.phone && cleanDigits && u.phone.replace(/\D/g, '').endsWith(cleanDigits)) return true;
-          return false;
-        });
+        const fallback = (initialSeedState.users || []).find(matchUser);
         if (fallback) {
           user = { ...fallback };
-          if (!state.users) state.users = [];
-          state.users.push(user);
+          targetFarmId = 'farm_01';
         }
       }
 
       if (!user) {
-        user = state.users?.[0] || { id: 'usr_moura', name: 'Moura', role: 'admin', phone: '0550000001', password: 'password123', status: 'active' };
+        return alert("Identifiant introuvable. Veuillez vérifier votre numéro de téléphone ou votre email.");
+      }
+
+      // Si l'utilisateur appartient à une autre ferme, basculer sur cette ferme
+      if (state.farm && targetFarmId !== state.farm.id) {
+        switchActiveFarm(targetFarmId, user);
       }
 
       // Vérification du mot de passe ou code PIN si renseigné
@@ -7047,13 +7217,32 @@
 
       if (!name) return alert('Veuillez renseigner votre nom et prénom.');
       if (!phone) return alert('Veuillez renseigner votre numéro de téléphone.');
-      if (code && state.farm && code !== state.farm.inviteCode) {
-        const foundFarm = (state.farms || []).find(f => f.inviteCode === code);
-        if (foundFarm) {
-          state.farm = foundFarm;
+
+      let targetFarm = null;
+      if (code) {
+        if (state.farm && state.farm.inviteCode === code) {
+          targetFarm = state.farm;
         } else {
-          return alert(`Code d'invitation invalide. Le code valide de cette ferme est "${state.farm.inviteCode}".`);
+          targetFarm = (state.farms || []).find(f => f.inviteCode === code);
+          if (!targetFarm && state.farmsData) {
+            for (const fId of Object.keys(state.farmsData)) {
+              if (state.farmsData[fId].farm && state.farmsData[fId].farm.inviteCode === code) {
+                targetFarm = state.farmsData[fId].farm;
+                break;
+              }
+            }
+          }
         }
+        if (!targetFarm) {
+          return alert(`Code d'invitation "${code}" introuvable. Veuillez vérifier le code fourni par votre gérant.`);
+        }
+      } else {
+        targetFarm = state.farm || { id: 'farm_01', name: 'Ferme Moura Pleurotes', inviteCode: 'MYCO-MOURA-2026' };
+      }
+
+      // Si la ferme cible est différente de la ferme active, basculer d'abord
+      if (state.farm && targetFarm.id !== state.farm.id) {
+        switchActiveFarm(targetFarm.id);
       }
 
       const newUserId = 'usr_' + Date.now();
@@ -7064,7 +7253,7 @@
         phone: phone,
         role: roleReq,
         pin: pin,
-        farmId: state.farm ? state.farm.id : 'farm_01',
+        farmId: targetFarm.id,
         status: 'active',
         title: roleReq === 'delivery' ? 'Livreur Express' : 'Ouvrier Culture & Expédition'
       };
@@ -7132,15 +7321,11 @@
         createdAt: new Date().toISOString().slice(0, 10)
       };
 
-      if (!state.farms) state.farms = [];
-      state.farms.push(newFarm);
-      state.farm = newFarm;
-
       const ownerUser = {
         id: ownerId,
         name: ownerName,
         email: ownerEmail,
-        phone: ownerPhone || '0550000001',
+        phone: ownerPhone || '',
         role: 'admin',
         password: ownerPassword,
         pin: '1234',
@@ -7149,17 +7334,48 @@
         title: 'Propriétaire & Gérant'
       };
 
-      if (!state.users) state.users = [];
-      state.users.push(ownerUser);
-      state.currentUser = ownerUser;
+      // Nouveaux stocks de départ avec quantités à 0 pour saisie du stock réel
+      const starterStocks = [
+        { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
+        { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
+        { id: 'stk_' + farmId + '_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
+        { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
+      ];
 
-      currentRole = 'admin';
-      currentTab = 'dashboard';
-      localStorage.setItem('mycotrack_session_active', 'true');
-      localStorage.setItem('mycotrack_saved_user_id', ownerId);
+      // Enregistrer les données de la ferme précédente
+      saveCurrentFarmData();
 
-      saveState();
-      setRole('admin');
+      if (!state.farms) state.farms = [];
+      state.farms.push(newFarm);
+
+      if (!state.farmsData) state.farmsData = {};
+      state.farmsData[farmId] = {
+        farm: newFarm,
+        users: [ ownerUser ],
+        notifications: [
+          { id: 'notif_' + Date.now(), title: '🎉 Bienvenue sur MycoTrack Pro', body: 'Votre exploitation SaaS ' + farmName + ' est créée et prête !', type: 'system', date: 'Aujourd\'hui', read: false }
+        ],
+        deliverers: [],
+        clients: [],
+        deliveries: [],
+        strains: [
+          'Pleurote Gris HK35',
+          'Pleurote Jaune (Cornucopiae)',
+          'Pleurote Blanc Sporesol',
+          'Pleurote Plein Air (Ostreatus)',
+          'Shiitaké (Lentinula edodes)'
+        ],
+        stocks: starterStocks,
+        tables: [],
+        batches: [],
+        bags: [],
+        units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
+        expenseCategories: initialSeedState.expenseCategories,
+        expenses: []
+      };
+
+      // Basculer sur la nouvelle ferme
+      switchActiveFarm(farmId, ownerUser);
       showToast(`Ferme "${farmName}" créée avec succès ! Bienvenue ${ownerName}. Code : ${inviteCode}`);
     }
 
@@ -7274,11 +7490,7 @@
           createdAt: new Date().toISOString().slice(0, 10)
         };
 
-        if (!state.farms) state.farms = [];
-        state.farms.push(newFarm);
-        state.farm = newFarm;
-
-        const newUser = {
+        const ownerUser = {
           id: ownerId,
           name: name,
           email: email,
@@ -7290,17 +7502,48 @@
           status: 'active',
           title: 'Propriétaire & Gérant'
         };
-        if (!state.users) state.users = [];
-        state.users.push(newUser);
-        state.currentUser = newUser;
-        currentRole = 'admin';
-        currentTab = 'dashboard';
-        localStorage.setItem('mycotrack_session_active', 'true');
-        localStorage.setItem('mycotrack_saved_user_id', newUser.id);
-        saveState();
+
+        const starterStocks = [
+          { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
+          { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
+          { id: 'stk_' + farmId + '_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
+          { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
+        ];
+
+        saveCurrentFarmData();
+
+        if (!state.farms) state.farms = [];
+        state.farms.push(newFarm);
+
+        if (!state.farmsData) state.farmsData = {};
+        state.farmsData[farmId] = {
+          farm: newFarm,
+          users: [ ownerUser ],
+          notifications: [
+            { id: 'notif_' + Date.now(), title: '🎉 Bienvenue sur MycoTrack Pro', body: 'Votre exploitation SaaS ' + farmName + ' est créée et prête !', type: 'system', date: 'Aujourd\'hui', read: false }
+          ],
+          deliverers: [],
+          clients: [],
+          deliveries: [],
+          strains: [
+            'Pleurote Gris HK35',
+            'Pleurote Jaune (Cornucopiae)',
+            'Pleurote Blanc Sporesol',
+            'Pleurote Plein Air (Ostreatus)',
+            'Shiitaké (Lentinula edodes)'
+          ],
+          stocks: starterStocks,
+          tables: [],
+          batches: [],
+          bags: [],
+          units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
+          expenseCategories: initialSeedState.expenseCategories,
+          expenses: []
+        };
+
+        switchActiveFarm(farmId, ownerUser);
         closeModal();
-        setRole('admin');
-        showToast(`Ferme "${farmName}" créée avec succès ! Votre code est ${inviteCode}.`);
+        showToast(`Ferme "${farmName}" créée avec succès ! Bienvenue ${name}. Code : ${inviteCode}`);
       } else {
         const role = document.getElementById('signup-role')?.value || 'culture';
         const pin = (document.getElementById('signup-pin')?.value || '').trim() || '1234';
