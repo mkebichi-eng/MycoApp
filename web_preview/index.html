@@ -16,11 +16,17 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
   <!-- Tailwind CSS -->
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js">
-    // Auto-init Firebase & PWA Service Worker
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+
+  <!-- Firebase Web SDK (Compat mode for cloud sync & offline persistence) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- PWA & iOS Helpers -->
+  <script>
     window.addEventListener('load', () => {
-      initFirebaseCloud();
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         navigator.serviceWorker.register('sw.js').then(() => console.log('PWA Service Worker active.')).catch(e => console.log('SW note:', e));
       }
       checkIosPwaBanner();
@@ -28,18 +34,17 @@
 
     function checkIosPwaBanner() {
       const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-      const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+      const isStandalone = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
       if (isIos && !isStandalone && !sessionStorage.getItem('myco_ios_banner_dismissed')) {
-        showToast("📲 Pour installer sur iPhone : appuyez sur Partager ⎋ puis 'Sur l\'écran d\'accueil'");
+        setTimeout(() => {
+          if (typeof showToast === 'function') {
+            showToast("📲 Pour installer sur iPhone : appuyez sur Partager ⎋ puis 'Sur l'écran d'accueil'");
+          }
+        }, 1500);
         sessionStorage.setItem('myco_ios_banner_dismissed', 'true');
       }
     }
   </script>
-
-  <!-- Firebase Web SDK (Compat mode for cloud sync & offline persistence) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
   <style>
     body {
@@ -341,14 +346,200 @@
     if (!state.expenseCategories) state.expenseCategories = initialSeedState.expenseCategories;
 
     // ==========================================
-    // MOTEUR FIREBASE CLOUD & OFFLINE PERSISTENCE
+    // MOTEUR DOUBLE CLOUD : FIREBASE SDK + DIRECT REST API
+    // Synchronisation multi-appareils instantanée (Android APK & iOS/Web App)
+    // Résistant aux restrictions WebView, hors-ligne & casse insensible
     // ==========================================
+    const FIRESTORE_PROJECT_ID = 'mycoapp-ferme-69081';
+    const FIRESTORE_REST_BASE = 'https://firestore.googleapis.com/v1/projects/' + FIRESTORE_PROJECT_ID + '/databases/(default)/documents';
+
     let firebaseApp = null;
     let firestoreDb = null;
     let isCloudConnected = false;
     let currentFarmSnapshotUnsubscribe = null;
     let isSyncingToFirestore = false;
+    let fbInitAttempts = 0;
 
+    // Sérialiseur d'objets JavaScript vers documents Firestore REST
+    function toFirestoreRestFields(obj) {
+      const fields = {};
+      if (!obj || typeof obj !== 'object') return fields;
+      for (const [k, v] of Object.entries(obj)) {
+        if (v === null || v === undefined) {
+          fields[k] = { nullValue: null };
+        } else if (typeof v === 'boolean') {
+          fields[k] = { booleanValue: v };
+        } else if (typeof v === 'number') {
+          fields[k] = Number.isInteger(v) ? { integerValue: v.toString() } : { doubleValue: v };
+        } else if (typeof v === 'string') {
+          fields[k] = { stringValue: v };
+        } else {
+          try {
+            fields[k] = { stringValue: JSON.stringify(v) };
+          } catch (e) {
+            fields[k] = { stringValue: String(v) };
+          }
+        }
+      }
+      return fields;
+    }
+
+    // Désérialiseur de documents Firestore REST vers objets JavaScript
+    function fromFirestoreRestFields(fields) {
+      const res = {};
+      if (!fields || typeof fields !== 'object') return res;
+      for (const [k, v] of Object.entries(fields)) {
+        if ('stringValue' in v) {
+          const val = v.stringValue;
+          if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+            try {
+              res[k] = JSON.parse(val);
+            } catch (e) {
+              res[k] = val;
+            }
+          } else {
+            res[k] = val;
+          }
+        } else if ('integerValue' in v) {
+          res[k] = parseInt(v.integerValue, 10);
+        } else if ('doubleValue' in v) {
+          res[k] = parseFloat(v.doubleValue);
+        } else if ('booleanValue' in v) {
+          res[k] = v.booleanValue;
+        } else if ('nullValue' in v) {
+          res[k] = null;
+        } else if ('mapValue' in v && v.mapValue.fields) {
+          res[k] = fromFirestoreRestFields(v.mapValue.fields);
+        } else if ('arrayValue' in v && v.arrayValue.values) {
+          res[k] = v.arrayValue.values.map(item => {
+            if ('stringValue' in item) {
+              try { return JSON.parse(item.stringValue); } catch(e) { return item.stringValue; }
+            }
+            return item;
+          });
+        }
+      }
+      return res;
+    }
+
+    // Sauvegarde Cloud universelle (Firestore SDK + REST direct)
+    async function cloudSaveDoc(collection, docId, data) {
+      if (!docId || !data) return false;
+      let success = false;
+
+      // 1. Tenter via Firestore Web SDK si disponible
+      if (firestoreDb) {
+        try {
+          await firestoreDb.collection(collection).doc(docId).set(data, { merge: true });
+          success = true;
+          updateCloudStatusIndicator(true);
+        } catch (e) {
+          console.warn('Firestore SDK write note:', e.message);
+        }
+      }
+
+      // 2. Toujours sécuriser / doubler avec l'API REST directe Google Firestore
+      try {
+        const payload = JSON.stringify({ fields: toFirestoreRestFields(data) });
+        const url = FIRESTORE_REST_BASE + '/' + collection + '/' + encodeURIComponent(docId);
+        const resp = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload
+        });
+        if (resp.ok) {
+          success = true;
+          updateCloudStatusIndicator(true);
+        }
+      } catch (e) {
+        console.warn('Firestore REST write note:', e.message);
+      }
+
+      return success;
+    }
+
+    // Lecture Cloud universelle (Firestore SDK + REST direct)
+    async function cloudGetDoc(collection, docId) {
+      if (!docId) return null;
+
+      // 1. Tenter via Firestore SDK avec timeout de 2.5s pour éviter tout blocage réseau
+      if (firestoreDb) {
+        try {
+          const snap = await Promise.race([
+            firestoreDb.collection(collection).doc(docId).get(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SDK_TIMEOUT')), 2500))
+          ]);
+          if (snap && snap.exists) {
+            updateCloudStatusIndicator(true);
+            return snap.data();
+          }
+        } catch (e) {
+          console.info('Firestore SDK get note (fallback REST en cours) :', e.message);
+        }
+      }
+
+      // 2. Interrogation directe via Firestore REST API (infaillible sous WebView file:// & Safari iOS)
+      try {
+        const url = FIRESTORE_REST_BASE + '/' + collection + '/' + encodeURIComponent(docId);
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.fields) {
+            updateCloudStatusIndicator(true);
+            return fromFirestoreRestFields(json.fields);
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore REST get note:', e.message);
+      }
+
+      return null;
+    }
+
+    // Recherche universelle de code d'invitation (casse insensible, multi-alias)
+    async function cloudGetInviteCode(codeRaw) {
+      if (!codeRaw) return null;
+      const cleanUpper = codeRaw.trim().toUpperCase().replace(/\s+/g, '');
+      const cleanLower = cleanUpper.toLowerCase();
+      const cleanAlpha = cleanUpper.replace(/[^A-Za-z0-9]/g, '');
+      const cleanTrim = codeRaw.trim();
+
+      const variants = Array.from(new Set([cleanUpper, cleanLower, cleanAlpha, cleanTrim]));
+
+      for (const variant of variants) {
+        if (!variant) continue;
+        try {
+          const docData = await cloudGetDoc('invite_codes', variant);
+          if (docData && docData.farmId) {
+            return docData;
+          }
+        } catch (e) {
+          console.warn('Invite lookup note for variant', variant, e.message);
+        }
+      }
+
+      // Requête directe dans 'farms' si le SDK Firestore est actif
+      if (firestoreDb) {
+        try {
+          const q = await firestoreDb.collection('farms').where('inviteCode', '==', cleanUpper).get();
+          if (!q.empty) {
+            const fDoc = q.docs[0];
+            const data = fDoc.data();
+            return {
+              farmId: fDoc.id,
+              farmName: data.name || (data.farm && data.farm.name) || 'Ferme Pleurotes',
+              inviteCode: cleanUpper
+            };
+          }
+        } catch (e) {
+          console.warn('Query farms note:', e.message);
+        }
+      }
+
+      return null;
+    }
+
+    // Initialisation automatique du moteur Cloud
     function initFirebaseCloud() {
       try {
         if (typeof firebase !== 'undefined') {
@@ -360,16 +551,29 @@
             messagingSenderId: '886418118468',
             appId: '1:886418118468:web:2ed58397e1d3ce58f42911'
           };
-          if (!firebase.apps.length) {
+          if (!firebase.apps || !firebase.apps.length) {
             firebaseApp = firebase.initializeApp(firebaseConfig);
           } else {
             firebaseApp = firebase.app();
           }
+
           firestoreDb = firebase.firestore();
-          // Active la persistance hors-ligne IndexedDB
-          firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
-            console.info('Persistence Firestore info:', err.code);
-          });
+
+          // Long polling activé pour fiabilité totale sous Android WebView et réseaux mobiles
+          try {
+            firestoreDb.settings({
+              experimentalAutoDetectLongPolling: true,
+              merge: true
+            });
+          } catch(e) {}
+
+          // Persistance hors-ligne sans conflit multi-onglets
+          try {
+            firestoreDb.enablePersistence({ synchronizeTabs: false }).catch(err => {
+              console.info('Persistence Firestore info:', err.code || err.message);
+            });
+          } catch (e) {}
+
           isCloudConnected = true;
           updateCloudStatusIndicator(true);
 
@@ -380,16 +584,22 @@
           // Publication automatique immédiate de toutes les fermes locales vers Firestore
           syncAllLocalFarmsToCloud();
         } else {
-          updateCloudStatusIndicator(false);
+          retryFirebaseInit();
         }
       } catch (err) {
-        console.warn('Firebase init (mode local/offline):', err);
-        updateCloudStatusIndicator(false);
+        console.warn('Firebase init note:', err.message);
+        retryFirebaseInit();
+      }
+    }
+
+    function retryFirebaseInit() {
+      if (fbInitAttempts < 25 && !firestoreDb) {
+        fbInitAttempts++;
+        setTimeout(initFirebaseCloud, 400);
       }
     }
 
     async function syncAllLocalFarmsToCloud() {
-      if (!firestoreDb) return;
       const farms = state.farms || [];
       if (state.farm && !farms.some(f => f.id === state.farm.id)) {
         farms.push(state.farm);
@@ -398,21 +608,30 @@
         if (!f || !f.id || !f.inviteCode) continue;
         const farmPayload = (state.farmsData && state.farmsData[f.id]) ? state.farmsData[f.id] : { farm: f, users: state.users || [] };
         try {
-          const cleanCode = f.inviteCode.toUpperCase().replace(/\s+/g, '');
-          // Document de la ferme
-          await firestoreDb.collection('farms').doc(f.id).set({
-            ...farmPayload,
-            inviteCode: cleanCode,
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
+          const cleanUpper = f.inviteCode.toUpperCase().replace(/\s+/g, '');
+          const cleanLower = cleanUpper.toLowerCase();
+          const cleanAlpha = cleanUpper.replace(/[^A-Za-z0-9]/g, '');
 
-          // Index direct du code d'invitation pour recherche instantanée multi-appareils
-          await firestoreDb.collection('invite_codes').doc(cleanCode).set({
+          const invitePayload = {
             farmId: f.id,
             farmName: f.name,
+            ownerName: (f.ownerName || (state.users && state.users[0] && state.users[0].name) || 'Gérant'),
+            inviteCode: cleanUpper,
             createdAt: f.createdAt || new Date().toISOString()
-          }, { merge: true });
-          console.log('☁️ Ferme synchronisée sur Firebase Cloud :', f.name, cleanCode);
+          };
+
+          // Sauvegarde de la ferme et des alias pour recherche instantanée
+          await Promise.allSettled([
+            cloudSaveDoc('farms', f.id, {
+              ...farmPayload,
+              inviteCode: cleanUpper,
+              lastSyncedAt: new Date().toISOString()
+            }),
+            cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
+            cloudSaveDoc('invite_codes', cleanLower, invitePayload),
+            cloudSaveDoc('invite_codes', cleanAlpha, invitePayload)
+          ]);
+          console.log('☁️ Ferme et alias synchronisés sur Firebase Cloud :', f.name, cleanUpper);
         } catch (e) {
           console.warn('Sync note pour ferme', f.id, e.message);
         }
@@ -441,21 +660,20 @@
     }
 
     async function syncCurrentFarmToFirestore() {
-      if (!firestoreDb || !state.farm || !state.farm.id) return;
+      if (!state.farm || !state.farm.id) return;
       try {
         const farmId = state.farm.id;
         saveCurrentFarmData();
         const payload = state.farmsData[farmId];
         if (!payload) return;
         isSyncingToFirestore = true;
-        await firestoreDb.collection('farms').doc(farmId).set({
+        await cloudSaveDoc('farms', farmId, {
           ...payload,
           lastSyncedAt: new Date().toISOString()
-        }, { merge: true });
+        });
         updateCloudStatusIndicator(true);
       } catch (err) {
         console.warn('Firestore sync note:', err.message);
-        updateCloudStatusIndicator(false);
       } finally {
         setTimeout(() => { isSyncingToFirestore = false; }, 600);
       }
@@ -484,41 +702,22 @@
               }
             }
           }, err => {
-            console.warn('Snapshot listener info:', err.message);
+            console.warn('Listener Firestore note:', err.message);
           });
       } catch (e) {
-        console.warn('Listener setup error:', e);
+        console.warn('setupFirestoreListener error:', e.message);
       }
     }
 
-    function initFarmsDataIfNeeded() {
-      if (!state.farmsData) state.farmsData = {};
-      const fId = (state.farm && state.farm.id) ? state.farm.id : 'farm_01';
-      if (!state.farmsData[fId]) {
-        saveCurrentFarmData();
-      }
-    }
-
-    function saveCurrentFarmData() {
-      if (!state.farm || !state.farm.id) return;
-      if (!state.farmsData) state.farmsData = {};
-      state.farmsData[state.farm.id] = {
-        farm: state.farm,
-        users: state.users || [],
-        notifications: state.notifications || [],
-        deliverers: state.deliverers || [],
-        clients: state.clients || [],
-        deliveries: state.deliveries || [],
-        strains: state.strains || initialSeedState.strains,
-        stocks: state.stocks || [],
-        tables: state.tables || [],
-        batches: state.batches || [],
-        bags: state.bags || [],
-        units: state.units || initialSeedState.units,
-        expenseCategories: state.expenseCategories || initialSeedState.expenseCategories,
-        expenses: state.expenses || []
-      };
-    }
+    // Auto-démarrage immédiat et écouteurs d'événements
+    initFirebaseCloud();
+    window.addEventListener('DOMContentLoaded', () => initFirebaseCloud());
+    window.addEventListener('load', () => initFirebaseCloud());
+    window.addEventListener('online', () => {
+      console.log('Connexion Internet active : synchronisation Cloud...');
+      initFirebaseCloud();
+      syncAllLocalFarmsToCloud();
+    });
 
     function loadFarmData(farmId) {
       if (!state.farmsData) state.farmsData = {};
@@ -786,20 +985,20 @@
         if (deliveryBtn) deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
         if (adminBtn) adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow";
         if (statusText) {
-          statusText.innerText = "Mode Ouvrier Culture & Expédition";
+          statusText.innerText = "Mode Technicien de Culture";
           statusText.className = "text-[11px] text-emerald-400 font-semibold";
         }
         if (bottomNav) bottomNav.classList.remove('hidden');
-        if (navDash) navDash.classList.add('hidden');
+        if (navDash) navDash.classList.remove('hidden');
         if (navCarnet) navCarnet.classList.add('hidden');
         if (navStockLabel) navStockLabel.innerText = "Stocks";
         if (navSalesLabel) navSalesLabel.innerText = "Expéditions";
         if (navSalesIcon) navSalesIcon.innerText = "🛵";
 
-        if (currentTab === 'dashboard' || currentTab === 'carnet' || currentTab === 'delivery') {
-          switchTab('production');
+        if (currentTab === 'carnet' || currentTab === 'delivery') {
+          switchTab('dashboard');
         } else {
-          switchTab(currentTab);
+          switchTab(currentTab || 'dashboard');
         }
       } else {
         // Admin
@@ -829,8 +1028,9 @@
         tab = 'production';
       }
       // Sécurité stricte des rôles : l'ouvrier ne peut pas naviguer vers Accueil ou Carnet
-      if (currentRole === 'culture' && (tab === 'dashboard' || tab === 'carnet' || tab === 'clients' || tab === 'deliverers')) {
-        tab = 'production';
+      // Sécurité stricte des rôles : le technicien ne peut pas naviguer vers Carnet (clients/livreurs)
+      if (currentRole === 'culture' && (tab === 'carnet' || tab === 'clients' || tab === 'deliverers')) {
+        tab = 'dashboard';
       }
       if (tab === 'clients') {
         tab = 'carnet';
@@ -1328,9 +1528,192 @@
       reportWindow.document.close();
     }
 
+    
+    // ==========================================
+    // TABLEAU DE BORD DÉDIÉ AU TECHNICIEN DE CULTURE
+    // Suivi opérationnel : Sacs actifs, fructification, récoltes du jour
+    // ZÉRO DONNÉE FINANCIÈRE OU SENSIBLE (Logique et valorisant)
+    // ==========================================
+    function renderCultureTechnicianDashboardView() {
+      const container = document.getElementById('app-content');
+      const allTables = state.tables || [];
+      const bags = state.bags || [];
+
+      const activeTables = allTables.filter(t => !t.archived && t.status !== 'Archivé');
+      const activeBags = bags.filter(b => {
+        const t = allTables.find(tbl => tbl.id === b.tableId || tbl.id === b.batchId);
+        return t ? (!t.archived && t.status !== 'Archivé') : true;
+      });
+
+      const totalContainers = activeBags.length;
+      const fruitingBags = activeBags.filter(b => b.status === 'fruiting');
+      const incubationBags = activeBags.filter(b => b.status === 'incubation');
+      const contaminatedBags = activeBags.filter(b => b.status === 'contaminated');
+      const totalHarvestedKg = activeBags.reduce((acc, b) => acc + (b.harvestedKg || 0), 0);
+      const pendingDeliveries = (state.deliveries || []).filter(d => d.status !== 'settled');
+
+      container.innerHTML = `
+        <div class="space-y-3 pb-6">
+          <!-- En-tête Accueil Technicien -->
+          <div class="bg-gradient-to-r from-[#142214] via-[#1a2d1a] to-[#0f1a0f] p-3.5 rounded-2xl border border-[#2d4a2d] shadow-lg flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-[#2d4a2d] border border-[#7bc67e]/40 flex items-center justify-center text-xl shadow-inner">
+                🍄
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-sm font-bold text-white tracking-wide">${state.currentUser ? state.currentUser.name : 'Technicien Culture'}</h2>
+                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 font-semibold uppercase tracking-wider">Technicien Culture</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-0.5">Exploitation : <span class="text-slate-200 font-medium">${state.farm ? state.farm.name : 'Ferme Mycologique'}</span></p>
+              </div>
+            </div>
+            <button onclick="switchTab('production')" class="text-[10px] bg-[#2d4a2d] hover:bg-[#3d6a3d] text-[#7bc67e] border border-[#7bc67e]/40 px-2.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1">
+              <span>Salles</span> <span>➔</span>
+            </button>
+          </div>
+
+          <!-- Alertes Prioritaires (Contaminations) -->
+          ${contaminatedBags.length > 0 ? `
+            <div class="bg-rose-950/40 border border-rose-600/40 rounded-xl p-2.5 flex items-center justify-between text-xs text-rose-300">
+              <div class="flex items-center gap-2">
+                <span class="text-base">🚨</span>
+                <div>
+                  <p class="font-bold text-[11px]">${contaminatedBags.length} sac(s) contaminé(s) détecté(s)</p>
+                  <p class="text-[9px] text-rose-400">À évacuer immédiatement de la salle de pousse pour éviter la propagation.</p>
+                </div>
+              </div>
+              <button onclick="switchTab('production')" class="px-2 py-1 bg-rose-700/80 hover:bg-rose-600 text-white rounded-lg text-[10px] font-bold">Voir</button>
+            </div>
+          ` : ''}
+
+          <!-- 4 Cartes Clés Opérationnelles (Zéro Finances) -->
+          <div class="grid grid-cols-2 gap-2">
+            <!-- Incubation -->
+            <div onclick="switchTab('production')" class="bg-[#142214] p-3 rounded-xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e]/60 transition-all shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incubation</span>
+                <span class="text-sm">🌑</span>
+              </div>
+              <div class="text-xl font-mono font-bold text-white">${incubationBags.length}</div>
+              <p class="text-[9px] text-[#7bc67e] mt-0.5">Sacs en chambre sombre</p>
+            </div>
+
+            <!-- Fructification -->
+            <div onclick="switchTab('production')" class="bg-[#142214] p-3 rounded-xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e]/60 transition-all shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fructification</span>
+                <span class="text-sm">💡</span>
+              </div>
+              <div class="text-xl font-mono font-bold text-emerald-400">${fruitingBags.length}</div>
+              <p class="text-[9px] text-emerald-300/80 mt-0.5">Sacs ouverts en salle</p>
+            </div>
+
+            <!-- Total Récolté -->
+            <div onclick="switchTab('production')" class="bg-[#142214] p-3 rounded-xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e]/60 transition-all shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Récoltes Cumulées</span>
+                <span class="text-sm">⚖️</span>
+              </div>
+              <div class="text-xl font-mono font-bold text-[#e0b87a]">${totalHarvestedKg.toFixed(1)} <span class="text-xs font-normal">kg</span></div>
+              <p class="text-[9px] text-slate-400 mt-0.5">Poids total cueilli</p>
+            </div>
+
+            <!-- Expéditions / Livraisons en cours -->
+            <div onclick="switchTab('sales')" class="bg-[#142214] p-3 rounded-xl border border-[#2d4a2d] cursor-pointer hover:border-[#7bc67e]/60 transition-all shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Expéditions</span>
+                <span class="text-sm">🛵</span>
+              </div>
+              <div class="text-xl font-mono font-bold text-sky-400">${pendingDeliveries.length}</div>
+              <p class="text-[9px] text-sky-300/80 mt-0.5">Colis confiés aux livreurs</p>
+            </div>
+          </div>
+
+          <!-- Actions Rapides Technicien -->
+          <div class="bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d]">
+            <h3 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span>⚡</span> <span>Actions Rapides de Culture</span>
+            </h3>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="openBulkHarvestModal()" class="py-2.5 px-3 bg-[#e0b87a] hover:bg-amber-400 text-black rounded-xl font-bold text-xs shadow flex items-center justify-center gap-2 transition-all">
+                <span>⚖️</span> <span>Récolte Multi-Sacs</span>
+              </button>
+              <button onclick="openNewTableModal()" class="py-2.5 px-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow flex items-center justify-center gap-2 transition-all">
+                <span>+</span> <span>Nouvelle Table</span>
+              </button>
+              <button onclick="openNewSaleModal()" class="py-2 px-3 bg-[#1e2e1e] hover:bg-[#2e3e2e] text-[#7bc67e] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all">
+                <span>🛵</span> <span>Déclarer Expédition</span>
+              </button>
+              <button onclick="switchTab('stock')" class="py-2 px-3 bg-[#1e2e1e] hover:bg-[#2e3e2e] text-slate-300 border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all">
+                <span>📦</span> <span>Vérifier Matières</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tables & Lots Actifs (Aperçu des Salles) -->
+          <div class="bg-[#142214] p-3 rounded-xl border border-[#2d4a2d]">
+            <div class="flex justify-between items-center mb-2">
+              <h3 class="text-[11px] font-bold text-[#7bc67e] uppercase tracking-wider flex items-center gap-1.5">
+                <span>🌱</span> <span>Tables de Culture en Activité (${activeTables.length})</span>
+              </h3>
+              <button onclick="switchTab('production')" class="text-[10px] text-[#7bc67e] hover:underline font-bold">
+                Tout voir ➔
+              </button>
+            </div>
+
+            ${activeTables.length === 0 ? `
+              <div class="text-center py-6 text-slate-500 text-xs">
+                <span class="text-2xl block mb-1">🍄</span>
+                Aucune table active pour le moment.<br>
+                <button onclick="openNewTableModal()" class="mt-2 text-[10px] text-[#7bc67e] font-bold underline">Créer la première table de culture</button>
+              </div>
+            ` : `
+              <div class="space-y-2">
+                ${activeTables.slice(0, 4).map(tbl => {
+                  const tBags = bags.filter(b => b.tableId === tbl.id || b.batchId === tbl.id);
+                  const tFruiting = tBags.filter(b => b.status === 'fruiting').length;
+                  const tKg = tBags.reduce((sum, b) => sum + (b.harvestedKg || 0), 0);
+                  const isIncubating = tbl.status === 'Incubation' || tFruiting === 0;
+
+                  return `
+                    <div onclick="switchTab('production')" class="p-2.5 rounded-xl bg-[#0a140a] border border-[#223822] hover:border-[#7bc67e]/40 cursor-pointer transition-all flex items-center justify-between">
+                      <div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-xs">${isIncubating ? '🌑' : '💡'}</span>
+                          <span class="font-bold text-xs text-white">${tbl.name || 'Table sans nom'}</span>
+                          <span class="text-[9px] px-1.5 py-0.2 rounded font-mono ${isIncubating ? 'bg-amber-950/60 text-amber-300' : 'bg-emerald-950/60 text-emerald-300'}">
+                            ${tbl.status || (isIncubating ? 'Incubation' : 'Fructification')}
+                          </span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5">
+                          ${tbl.strain || 'Pleurote'} • ${tBags.length} sacs (${tFruiting} en pousse)
+                        </p>
+                      </div>
+                      <div class="text-right">
+                        <span class="font-mono text-xs font-bold text-[#e0b87a]">${tKg.toFixed(1)} kg</span>
+                        <p class="text-[9px] text-slate-500">récolté</p>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Raccourci Équipe / Support -->
+          <div class="text-center pt-2">
+            <button onclick="switchTab('production')" class="text-[10px] text-slate-400 hover:text-slate-200">
+              Accéder à la gestion détaillée des sacs & volées ➔
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     function renderDashboardView() {
       if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
-        switchTab('production');
+        renderCultureTechnicianDashboardView();
         return;
       }
       const container = document.getElementById('app-content');
@@ -1744,7 +2127,7 @@
             const isInDelivery = d.status === 'in_delivery';
             const isDelivered = d.status === 'delivered_pending_settlement';
 
-            // Carte Dédiée Ouvrier (Culture & Expédition) : ZÉRO CHIFFRES D'AFFAIRES OU PRIX
+            // Carte Dédiée Technicien de Culture : ZÉRO CHIFFRES D'AFFAIRES OU PRIX
             if (currentRole === 'culture') {
               return `
                 <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border ${isSettled ? 'border-[#2d4a2d]' : 'border-[#4a9e4e] bg-[#162416]'} space-y-2">
@@ -1768,7 +2151,7 @@
                     </span>
                   </div>
 
-                  <!-- Détails logistiques pour ouvrier -->
+                  <!-- Détails logistiques pour technicien -->
                   <div class="bg-[#0f1a0f] p-2.5 rounded-xl border border-[#2d4a2d] text-xs space-y-1">
                     <div class="flex justify-between text-[#aaa]">
                       <span>Quantité de pleurotes expédiée :</span>
@@ -1787,7 +2170,7 @@
 
                   <p class="text-xs text-[#aaa]">📍 ${d.clientAddress}</p>
 
-                  <!-- Actions ouvrier -->
+                  <!-- Actions technicien -->
                   <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[#2d4a2d]/40">
                     <a href="tel:${(d.clientPhone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${d.clientPhone}'); return false;" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                       <span>📞</span> <span>Appeler Client</span>
@@ -2100,7 +2483,7 @@
       );
     }
 
-    // Modal Dédiée Ouvrier : Expédier Récolte & Déclencher Livraison sans voir les marges financières
+    // Modal Dédiée Technicien : Expédier Récolte & Déclencher Livraison sans voir les marges financières
     function openWorkerDispatchModal(prefillKg = null) {
       const clientsList = state.clients || [];
       const deliverersList = (state.deliverers || []).filter(d => d.status === 'active');
@@ -2206,7 +2589,7 @@
         status: 'pending_acceptance',
         createdAt: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
         notes: notes,
-        dispatchedBy: state.currentUser ? state.currentUser.name : 'Ouvrier Culture'
+        dispatchedBy: state.currentUser ? state.currentUser.name : 'Technicien Culture'
       };
 
       if (!state.deliveries) state.deliveries = [];
@@ -2791,7 +3174,7 @@
                     <span class="text-[10px] text-[#888]">Rôle attribué :</span>
                     <select onchange="approveUserRole('${u.id}', this.value)" class="bg-[#0f1a0f] border border-[#2d4a2d] rounded-lg px-2 py-1 text-white text-xs font-semibold">
                       <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Administrateur (Gérant)</option>
-                      <option value="culture" ${u.role === 'culture' ? 'selected' : ''}>🍄 Ouvrier Culture & Expédition</option>
+                      <option value="culture" ${u.role === 'culture' ? 'selected' : ''}>🍄 Technicien de Culture</option>
                       <option value="delivery" ${u.role === 'delivery' ? 'selected' : ''}>🛵 Livreur Express</option>
                     </select>
                   </div>
@@ -2802,7 +3185,7 @@
             <!-- Inscription employé / nouveau membre direct avec Téléphone et PIN 4 chiffres -->
             <div class="pt-2">
               <button onclick="openAddTeamMemberModal()" class="w-full py-3 bg-[#1f3a1f] hover:bg-[#2e522e] border border-[#7bc67e]/40 text-[#7bc67e] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all">
-                <span>➕</span> <span>Ajouter un Employé (Ouvrier ou Livreur avec PIN)</span>
+                <span>➕</span> <span>Ajouter un Collaborateur (Technicien ou Livreur avec PIN)</span>
               </button>
             </div>
           </div>
@@ -2959,7 +3342,7 @@
       const randomPin = Math.floor(1000 + Math.random() * 9000);
       showModal(`
         <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>👥</span> <span>Ajouter un Employé (Ouvrier ou Livreur)</span>
+          <span>👥</span> <span>Ajouter un Collaborateur (Technicien ou Livreur)</span>
         </h3>
         <p class="text-[11px] text-[#888] mb-3">Enregistrez directement votre collaborateur avec son numéro de téléphone et son code PIN 4 chiffres.</p>
         
@@ -2977,7 +3360,7 @@
             <div>
               <label class="text-[#888] block mb-1">Rôle dans la ferme *</label>
               <select id="team-new-role" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold">
-                <option value="culture">🍄 Ouvrier Culture & Expédition</option>
+                <option value="culture">🍄 Technicien de Culture</option>
                 <option value="delivery">🛵 Livreur Express</option>
                 <option value="admin">👑 Co-Gérant (Admin)</option>
               </select>
@@ -3026,7 +3409,7 @@
         password: role === 'admin' ? 'password123' : undefined,
         farmId: state.farm ? state.farm.id : 'farm_01',
         status: 'active',
-        title: role === 'culture' ? 'Ouvrier Culture & Expédition' : (role === 'delivery' ? 'Livreur Express' : 'Co-Gérant')
+        title: role === 'culture' ? 'Technicien de Culture' : (role === 'delivery' ? 'Livreur Express' : 'Co-Gérant')
       };
 
       if (!state.users) state.users = [];
@@ -7101,7 +7484,7 @@
               <span>🏢</span> <span>Créer une Nouvelle Ferme (SaaS Multi-Fermes)</span>
             </button>
             <button onclick="closeModal(); setAuthTab('join'); logoutUser();" class="w-full py-2 bg-[#142214] hover:bg-[#1f3a1f] border border-[#2d4a2d] hover:border-[#7bc67e] text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
-              <span>👤</span> <span>Inscrire un Nouvel Équipier (Ouvrier ou Livreur)</span>
+              <span>👤</span> <span>Inscrire un Nouvel Équipier (Technicien ou Livreur)</span>
             </button>
           </div>
 
@@ -7142,7 +7525,7 @@
       state.currentUser = user;
       currentRole = user.role || 'culture';
       if (user.role === 'culture') {
-        currentTab = 'production';
+        currentTab = 'dashboard';
       } else if (user.role === 'delivery') {
         currentTab = 'delivery';
       } else {
@@ -7161,11 +7544,34 @@
     }
 
     function copyToClipboard(text) {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text);
+      if (!text) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => {
+            showToast(`Code "${text}" copié dans le presse-papier !`);
+          }).catch(() => fallbackCopyText(text));
+        } else {
+          fallbackCopyText(text);
+        }
+      } catch (e) {
+        fallbackCopyText(text);
+      }
+    }
+
+    function fallbackCopyText(text) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
         showToast(`Code "${text}" copié dans le presse-papier !`);
-      } else {
-        alert(`Code d'invitation : ${text}`);
+      } catch (e) {
+        prompt('Copiez ce code d\'invitation :', text);
       }
     }
 
@@ -7329,7 +7735,7 @@
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Rôle attribué par le gérant *</label>
               <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none">
-                <option value="culture">🍄 Ouvrier Culture & Récolte (Option 1 : Zéro données financières)</option>
+                <option value="culture">🍄 Technicien de Culture (Gestion des sacs, récoltes & expéditions - Zéro finances)</option>
                 <option value="delivery">🛵 Livreur Express (Accès courses & livraisons)</option>
               </select>
             </div>
@@ -7359,7 +7765,7 @@
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
                   <span>🔒 Mot de passe (Gérant) ou PIN 4 chiffres (Équipe)</span>
-                  <span class="text-[10px] text-[#888]">Ouvrier & Livreur : 4 chiffres</span>
+                  <span class="text-[10px] text-[#888]">Technicien & Livreur : 4 chiffres</span>
                 </label>
                 <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="">
               </div>
@@ -7562,7 +7968,7 @@
       state.currentUser = user;
       currentRole = user.role || 'culture';
       if (user.role === 'culture') {
-        currentTab = 'production';
+        currentTab = 'dashboard';
       } else if (user.role === 'delivery') {
         currentTab = 'delivery';
       } else {
@@ -7686,20 +8092,20 @@
       const originalBtnHtml = joinBtn ? joinBtn.innerHTML : '';
       if (joinBtn) {
         joinBtn.disabled = true;
-        joinBtn.innerHTML = '<span>⏳</span> <span>Recherche de la ferme sur le Cloud...</span>';
+        joinBtn.innerHTML = '<span>⏳</span> <span>Recherche de la ferme sur Google Cloud...</span>';
       }
 
       let targetFarm = null;
       let remoteFarmFullPayload = null;
 
-      // 1. Recherche locale d'abord (si déjà sur cet appareil)
-      if (state.farm && (state.farm.inviteCode || '').toUpperCase() === code) {
+      // 1. Recherche locale d'abord (si la ferme a été créée ou rejointe sur cet appareil)
+      if (state.farm && (state.farm.inviteCode || '').toUpperCase().replace(/\s+/g, '') === code) {
         targetFarm = state.farm;
       } else {
-        targetFarm = (state.farms || []).find(f => (f.inviteCode || '').toUpperCase() === code);
+        targetFarm = (state.farms || []).find(f => (f.inviteCode || '').toUpperCase().replace(/\s+/g, '') === code);
         if (!targetFarm && state.farmsData) {
           for (const fId of Object.keys(state.farmsData)) {
-            if (state.farmsData[fId].farm && (state.farmsData[fId].farm.inviteCode || '').toUpperCase() === code) {
+            if (state.farmsData[fId].farm && (state.farmsData[fId].farm.inviteCode || '').toUpperCase().replace(/\s+/g, '') === code) {
               targetFarm = state.farmsData[fId].farm;
               break;
             }
@@ -7707,33 +8113,18 @@
         }
       }
 
-      // 2. Recherche sur Firebase Cloud Firestore
-      if (!targetFarm && firestoreDb) {
+      // 2. Recherche sur Google Cloud Firestore (Dual Engine SDK + Direct REST, Casse insensible)
+      if (!targetFarm) {
         try {
-          // A. Recherche directe par document dans invite_codes
-          const codeSnap = await firestoreDb.collection('invite_codes').doc(code).get();
-          if (codeSnap.exists) {
-            const cData = codeSnap.data();
-            const farmSnap = await firestoreDb.collection('farms').doc(cData.farmId).get();
-            if (farmSnap.exists) {
-              remoteFarmFullPayload = farmSnap.data();
-              targetFarm = remoteFarmFullPayload.farm || {
-                id: cData.farmId,
-                name: cData.farmName || 'Ferme Pleurotes',
-                inviteCode: code
-              };
-            }
-          }
-
-          // B. Fallback : requête directe dans 'farms'
-          if (!targetFarm) {
-            const q1 = await firestoreDb.collection('farms').where('inviteCode', '==', code).get();
-            if (!q1.empty) {
-              remoteFarmFullPayload = q1.docs[0].data();
-              targetFarm = remoteFarmFullPayload.farm || {
-                id: q1.docs[0].id,
-                name: remoteFarmFullPayload.name || 'Ferme Pleurotes',
-                inviteCode: code
+          const inviteMeta = await cloudGetInviteCode(codeRaw);
+          if (inviteMeta && inviteMeta.farmId) {
+            const fPayload = await cloudGetDoc('farms', inviteMeta.farmId);
+            if (fPayload) {
+              remoteFarmFullPayload = fPayload;
+              targetFarm = fPayload.farm || {
+                id: inviteMeta.farmId,
+                name: inviteMeta.farmName || fPayload.name || 'Ferme Pleurotes',
+                inviteCode: inviteMeta.inviteCode || code
               };
             }
           }
@@ -7750,7 +8141,7 @@
         return alert(`Code d'invitation "${codeRaw}" introuvable sur le Cloud.\n\nVeuillez vérifier :\n1. Que le code est bien orthographié\n2. Que le téléphone du gérant a bien eu une connexion internet lors de la création de la ferme.`);
       }
 
-      // 3. Charger la ferme distante dans la mémoire de ce téléphone
+      // 3. Charger la ferme distante dans la mémoire de cet appareil
       if (remoteFarmFullPayload) {
         if (!state.farmsData) state.farmsData = {};
         state.farmsData[targetFarm.id] = {
@@ -7779,7 +8170,7 @@
         pin: pin,
         farmId: targetFarm.id,
         status: 'active',
-        title: roleReq === 'delivery' ? 'Livreur Express' : 'Ouvrier Culture & Expédition'
+        title: roleReq === 'delivery' ? 'Livreur Express' : 'Technicien de Culture'
       };
 
       if (!state.users) state.users = [];
@@ -7811,33 +8202,37 @@
       saveState();
 
       // Synchronisation immédiate du nouveau membre sur Firebase Cloud
-      if (firestoreDb && targetFarm) {
-        try {
-          await firestoreDb.collection('farms').doc(targetFarm.id).set({
-            users: state.users,
-            deliverers: state.deliverers || [],
-            notifications: firebase.firestore.FieldValue.arrayUnion({
-              id: 'notif_' + Date.now(),
-              title: '👥 Nouveau membre',
-              body: `${name} a rejoint l'exploitation en tant que ${newUser.title}`,
-              date: 'Aujourd\'hui',
-              read: false
-            }),
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
-          console.log('☁️ Nouveau membre synchronisé sur Firebase Cloud.');
-        } catch (syncErr) {
-          console.warn('Note sync membre Firestore:', syncErr);
-        }
+      try {
+        const notifs = state.notifications || [];
+        notifs.unshift({
+          id: 'notif_' + Date.now(),
+          title: '👥 Nouveau membre',
+          body: `${name} a rejoint l'exploitation en tant que ${newUser.title}`,
+          date: 'Aujourd\'hui',
+          read: false
+        });
+        state.notifications = notifs;
+
+        await cloudSaveDoc('farms', targetFarm.id, {
+          users: state.users,
+          deliverers: state.deliverers || [],
+          notifications: notifs,
+          lastSyncedAt: new Date().toISOString()
+        });
+        console.log('☁️ Nouveau membre synchronisé sur Firebase Cloud.');
+      } catch (syncErr) {
+        console.warn('Note sync membre Firestore:', syncErr);
+      }
+
+      if (joinBtn) {
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = originalBtnHtml;
       }
 
       setRole(roleReq);
       showToast(`Bienvenue ${name} ! Votre adhésion à "${targetFarm.name}" est validée (PIN: ${pin}).`);
     }
 
-
-
-    
     async function submitCreateFarmFromPortal() {
       const farmName = (document.getElementById('portal-create-farm-name')?.value || '').trim();
       const ownerName = (document.getElementById('portal-create-owner-name')?.value || '').trim();
@@ -7853,18 +8248,21 @@
       const origBtnHtml = createBtn ? createBtn.innerHTML : '';
       if (createBtn) {
         createBtn.disabled = true;
-        createBtn.innerHTML = '<span>⏳</span> <span>Publication de la ferme sur le Cloud...</span>';
+        createBtn.innerHTML = '<span>⏳</span> <span>Publication de la ferme sur Google Cloud...</span>';
       }
 
       const codeSuffix = Math.floor(1000 + Math.random() * 9000);
-      const inviteCode = ('MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix).toUpperCase();
+      const cleanUpper = ('MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix).toUpperCase();
+      const cleanLower = cleanUpper.toLowerCase();
+      const cleanAlpha = cleanUpper.replace(/[^A-Za-z0-9]/g, '');
+
       const farmId = 'farm_' + Date.now();
       const ownerId = 'usr_' + Date.now();
 
       const newFarm = {
         id: farmId,
         name: farmName,
-        inviteCode: inviteCode,
+        inviteCode: cleanUpper,
         ownerId: ownerId,
         createdAt: new Date().toISOString().slice(0, 10)
       };
@@ -7923,30 +8321,41 @@
       // Basculer sur la nouvelle ferme
       switchActiveFarm(farmId, ownerUser);
 
-      // Publication immédiate sur Firebase Cloud
-      if (firestoreDb) {
-        try {
-          await firestoreDb.collection('farms').doc(farmId).set({
-            ...state.farmsData[farmId],
-            inviteCode: inviteCode,
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
+      // Publication immédiate sur Google Cloud Firestore (Ferme + tous les alias du code d'invitation)
+      const farmPayload = {
+        ...state.farmsData[farmId],
+        inviteCode: cleanUpper,
+        lastSyncedAt: new Date().toISOString()
+      };
 
-          await firestoreDb.collection('invite_codes').doc(inviteCode).set({
-            farmId: farmId,
-            farmName: farmName,
-            ownerName: ownerName,
-            createdAt: new Date().toISOString()
-          }, { merge: true });
-          console.log('☁️ Ferme et code d\'invitation publiés sur Firestore :', inviteCode);
-        } catch (cloudErr) {
-          console.warn('Erreur publication Cloud Firestore:', cloudErr);
-        }
+      const invitePayload = {
+        farmId: farmId,
+        farmName: farmName,
+        ownerName: ownerName,
+        inviteCode: cleanUpper,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        await Promise.allSettled([
+          cloudSaveDoc('farms', farmId, farmPayload),
+          cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
+          cloudSaveDoc('invite_codes', cleanLower, invitePayload),
+          cloudSaveDoc('invite_codes', cleanAlpha, invitePayload)
+        ]);
+        console.log('☁️ Ferme et alias de code d\'invitation publiés sur Firestore :', cleanUpper);
+      } catch (cloudErr) {
+        console.warn('Erreur publication Cloud Firestore:', cloudErr);
       }
 
-      showToast(`Ferme "${farmName}" créée avec succès ! Code d'invitation : ${inviteCode}`);
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.innerHTML = origBtnHtml;
+      }
+
+      showToast(`Ferme "${farmName}" créée avec succès ! Code d'invitation : ${cleanUpper}`);
     }
-  
+
     function approveUserRole(userId, role) {
       const user = (state.users || []).find(u => u.id === userId);
       if (user) {
