@@ -376,12 +376,46 @@
           if (state.farm && state.farm.id) {
             setupFirestoreListenerForActiveFarm(state.farm.id);
           }
+
+          // Publication automatique immédiate de toutes les fermes locales vers Firestore
+          syncAllLocalFarmsToCloud();
         } else {
           updateCloudStatusIndicator(false);
         }
       } catch (err) {
         console.warn('Firebase init (mode local/offline):', err);
         updateCloudStatusIndicator(false);
+      }
+    }
+
+    async function syncAllLocalFarmsToCloud() {
+      if (!firestoreDb) return;
+      const farms = state.farms || [];
+      if (state.farm && !farms.some(f => f.id === state.farm.id)) {
+        farms.push(state.farm);
+      }
+      for (const f of farms) {
+        if (!f || !f.id || !f.inviteCode) continue;
+        const farmPayload = (state.farmsData && state.farmsData[f.id]) ? state.farmsData[f.id] : { farm: f, users: state.users || [] };
+        try {
+          const cleanCode = f.inviteCode.toUpperCase().replace(/\s+/g, '');
+          // Document de la ferme
+          await firestoreDb.collection('farms').doc(f.id).set({
+            ...farmPayload,
+            inviteCode: cleanCode,
+            lastSyncedAt: new Date().toISOString()
+          }, { merge: true });
+
+          // Index direct du code d'invitation pour recherche instantanée multi-appareils
+          await firestoreDb.collection('invite_codes').doc(cleanCode).set({
+            farmId: f.id,
+            farmName: f.name,
+            createdAt: f.createdAt || new Date().toISOString()
+          }, { merge: true });
+          console.log('☁️ Ferme synchronisée sur Firebase Cloud :', f.name, cleanCode);
+        } catch (e) {
+          console.warn('Sync note pour ferme', f.id, e.message);
+        }
       }
     }
 
@@ -1755,7 +1789,7 @@
 
                   <!-- Actions ouvrier -->
                   <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[#2d4a2d]/40">
-                    <a href="tel:${d.clientPhone}" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                    <a href="tel:${(d.clientPhone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${d.clientPhone}'); return false;" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                       <span>📞</span> <span>Appeler Client</span>
                     </a>
                     <button onclick="triggerSystemPush('🛵 Rappel Expédition', 'Rappel pour la course ${d.orderNumber} vers ${d.clientName}'); showToast('Rappel envoyé au livreur !');" class="py-1.5 px-3 bg-[#0f1a0f] text-slate-300 border border-[#2d4a2d] hover:border-[#7bc67e] rounded-xl text-xs font-semibold flex items-center justify-center gap-1">
@@ -1798,7 +1832,7 @@
                   </div>
                   <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d]/50 pt-1">
                     <span>Livreur assigné : <strong>${d.delivererName}</strong></span>
-                    <span class="text-[#e0b87a]">Course : ${d.deliveryFee} DA</span>
+                    <span class="text-[#e0b87a]">${d.deliveryFee === 0 ? '🎁 Course Gratuite (0 DA)' : `Course : ${d.deliveryFee} DA`}</span>
                   </div>
 
                   ${isSettled ? `
@@ -1815,7 +1849,7 @@
 
                 <!-- Actions contextuelles selon statut -->
                 <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
-                  <a href="tel:${d.clientPhone}" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                  <a href="tel:${(d.clientPhone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${d.clientPhone}'); return false;" class="py-1.5 px-3 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                     <span>📞</span> <span>Client</span>
                   </a>
 
@@ -1857,6 +1891,38 @@
     }
 
     // Modale de Création de Vente avec calculs automatiques
+    
+    // ==========================================
+    // UTILITAIRES APPELS & LIVRAISONS GRATUITES
+    // ==========================================
+    function callPhoneNumber(phone) {
+      if (!phone) {
+        showToast('Numéro de téléphone non renseigné.');
+        return;
+      }
+      const cleanDigits = phone.toString().replace(/[^0-9+]/g, '');
+      if (!cleanDigits) {
+        showToast('Numéro de téléphone invalide.');
+        return;
+      }
+      // Ouvre l'application Téléphone native sur iOS Safari, Android & WebView
+      window.location.href = `tel:${cleanDigits}`;
+    }
+
+    function setFreeDeliveryFee() {
+      const feeInput = document.getElementById('vte-course-fee');
+      if (!feeInput) return;
+      const curVal = parseFloat(feeInput.value);
+      if (curVal === 0) {
+        const delivId = document.getElementById('vte-deliverer-id')?.value;
+        const deliverer = (state.deliverers || []).find(d => d.id === delivId);
+        feeInput.value = (deliverer && deliverer.fee) ? deliverer.fee : 350;
+      } else {
+        feeInput.value = 0;
+      }
+      recalculateSaleForm();
+    }
+
     function openNewSaleModal(preselectedClientId = null) {
       if (currentRole === 'culture') {
         openWorkerDispatchModal();
@@ -1900,8 +1966,13 @@
               </select>
             </div>
             <div>
-              <label class="text-[#888] block mb-1">Course livreur (DA) *</label>
-              <input id="vte-course-fee" type="number" step="50" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" oninput="recalculateSaleForm()">
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-[#888] block">Course livreur *</label>
+                <button type="button" onclick="setFreeDeliveryFee()" class="text-[9.5px] px-1.5 py-0.5 rounded-lg border border-[#7bc67e]/60 text-[#7bc67e] bg-[#142214] font-bold hover:bg-[#1f3a1f] transition-all">
+                  🎁 Gratuit (0 DA)
+                </button>
+              </div>
+              <input id="vte-course-fee" type="number" step="50" min="0" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" oninput="recalculateSaleForm()">
             </div>
           </div>
 
@@ -1941,7 +2012,8 @@
       const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
       const delivId = document.getElementById('vte-deliverer-id').value;
       const deliverer = (state.deliverers || []).find(d => d.id === delivId);
-      const fee = parseFloat(document.getElementById('vte-course-fee').value) || (deliverer ? deliverer.fee : 0);
+      const feeInputVal = document.getElementById('vte-course-fee')?.value;
+      const fee = (feeInputVal !== '' && !isNaN(parseFloat(feeInputVal))) ? Math.max(0, parseFloat(feeInputVal)) : (deliverer ? deliverer.fee : 0);
 
       if (!client || !deliverer) return;
 
@@ -1957,9 +2029,15 @@
           <span>Total facturé client :</span>
           <strong class="text-white text-sm">${totalFacture.toLocaleString()} DA</strong>
         </div>
-        <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d] pt-1">
+        <div class="flex justify-between text-[#aaa] border-t border-[#2d4a2d] pt-1 items-center">
           <span>Frais course livreur :</span>
-          <span class="text-[#e0b87a] font-semibold">${fee} DA <span class="text-[10px] text-[#888]">(modifiable)</span></span>
+          ${fee === 0 ? `
+            <span class="text-[#7bc67e] font-bold text-xs bg-[#1f3a1f] px-2 py-0.5 rounded-lg border border-[#7bc67e]/40">
+              🎁 Course Gratuite (0 DA)
+            </span>
+          ` : `
+            <span class="text-[#e0b87a] font-semibold">${fee} DA <span class="text-[10px] text-[#888]">(modifiable)</span></span>
+          `}
         </div>
         <div class="flex justify-between text-xs pt-1 border-t border-[#7bc67e]/30">
           <span class="text-[#7bc67e]">Net caisse estimé (si payé 100%) :</span>
@@ -1974,7 +2052,8 @@
       const qty = parseFloat(document.getElementById('vte-qty').value) || 0;
       const delivId = document.getElementById('vte-deliverer-id').value;
       const deliverer = (state.deliverers || []).find(d => d.id === delivId);
-      const fee = parseFloat(document.getElementById('vte-course-fee').value) || (deliverer ? deliverer.fee : 350);
+      const feeInputVal = document.getElementById('vte-course-fee')?.value;
+      const fee = (feeInputVal !== '' && !isNaN(parseFloat(feeInputVal))) ? Math.max(0, parseFloat(feeInputVal)) : 0;
 
       if (!client || qty <= 0 || !deliverer) return alert('Veuillez saisir une quantité valide.');
 
@@ -2381,7 +2460,7 @@
                   </div>
                 ` : `
                   <div class="grid grid-cols-2 gap-2 pt-1">
-                    <a href="tel:${d.clientPhone}" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+                    <a href="tel:${(d.clientPhone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${d.clientPhone}'); return false;" class="py-2.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer">
                       <span>📞</span> Appeler
                     </a>
                     <button onclick="alert('GPS vers : ' + '${d.clientAddress}')" class="py-2.5 bg-[#0f1a0f] text-[#aaa] border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
@@ -2402,7 +2481,7 @@
               <div class="bg-[#121c12] p-3 rounded-xl border border-[#2d4a2d] text-xs flex justify-between items-center opacity-75">
                 <div>
                   <span class="font-bold text-white">${d.clientName}</span>
-                  <span class="text-[10px] text-[#888] block">${d.quantityKg} kg • Course : ${d.deliveryFee} DA</span>
+                  <span class="text-[10px] text-[#888] block">${d.quantityKg} kg • ${d.deliveryFee === 0 ? '🎁 Course Gratuite (0 DA)' : `Course : ${d.deliveryFee} DA`}</span>
                 </div>
                 <span class="text-[#7bc67e] font-bold text-[10px]">✓ Clôturée</span>
               </div>
@@ -2552,7 +2631,7 @@
                 </p>
 
                 <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
-                  <a href="tel:${c.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
+                  <a href="tel:${(c.phone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${c.phone}'); return false;" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e] cursor-pointer">
                     <span>📞</span> <span>${c.phone}</span>
                   </a>
                   <button onclick="openNewSaleModal('${c.id}')" class="flex-1 py-1.5 bg-[#4a9e4e] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow hover:bg-emerald-600">
@@ -2616,7 +2695,7 @@
 
                   <!-- Actions rapides : Appel direct et modification -->
                   <div class="flex gap-2 pt-1 border-t border-[#2d4a2d]/40">
-                    <a href="tel:${d.phone}" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e]">
+                    <a href="tel:${(d.phone || '').replace(/[^0-9+]/g, '')}" onclick="callPhoneNumber('${d.phone}'); return false;" class="flex-1 py-1.5 bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#2e522e] cursor-pointer">
                       <span>📞</span> <span>Appeler (${d.phone})</span>
                     </a>
                     <button onclick="openEditDelivererModal('${d.id}')" class="px-3 py-1.5 bg-[#1a2a1a] text-slate-300 border border-[#2d4a2d] rounded-xl font-semibold text-xs flex items-center justify-center gap-1 hover:text-white">
@@ -7590,42 +7669,104 @@
       renderCurrentView();
     }
 
-    function submitJoinFarmFromPortal() {
-      const code = (document.getElementById('portal-join-code')?.value || '').trim().toUpperCase();
+    async function submitJoinFarmFromPortal() {
+      const codeRaw = (document.getElementById('portal-join-code')?.value || '').trim();
+      const code = codeRaw.toUpperCase().replace(/\s+/g, '');
       const name = (document.getElementById('portal-join-name')?.value || '').trim();
       const phone = (document.getElementById('portal-join-phone')?.value || '').trim();
       const email = (document.getElementById('portal-join-email')?.value || '').trim() || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@ferme.dz`;
       const roleReq = document.getElementById('portal-join-role-requested')?.value || 'culture';
       const pin = (document.getElementById('portal-join-pin')?.value || '').trim() || '1234';
 
+      if (!code) return alert('Veuillez renseigner le code d\'invitation fourni par votre gérant (ex: MYCO-XXXX-1234).');
       if (!name) return alert('Veuillez renseigner votre nom et prénom.');
       if (!phone) return alert('Veuillez renseigner votre numéro de téléphone.');
 
+      const joinBtn = document.querySelector('button[onclick="submitJoinFarmFromPortal()"]');
+      const originalBtnHtml = joinBtn ? joinBtn.innerHTML : '';
+      if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.innerHTML = '<span>⏳</span> <span>Recherche de la ferme sur le Cloud...</span>';
+      }
+
       let targetFarm = null;
-      if (code) {
-        if (state.farm && state.farm.inviteCode === code) {
-          targetFarm = state.farm;
-        } else {
-          targetFarm = (state.farms || []).find(f => f.inviteCode === code);
-          if (!targetFarm && state.farmsData) {
-            for (const fId of Object.keys(state.farmsData)) {
-              if (state.farmsData[fId].farm && state.farmsData[fId].farm.inviteCode === code) {
-                targetFarm = state.farmsData[fId].farm;
-                break;
-              }
+      let remoteFarmFullPayload = null;
+
+      // 1. Recherche locale d'abord (si déjà sur cet appareil)
+      if (state.farm && (state.farm.inviteCode || '').toUpperCase() === code) {
+        targetFarm = state.farm;
+      } else {
+        targetFarm = (state.farms || []).find(f => (f.inviteCode || '').toUpperCase() === code);
+        if (!targetFarm && state.farmsData) {
+          for (const fId of Object.keys(state.farmsData)) {
+            if (state.farmsData[fId].farm && (state.farmsData[fId].farm.inviteCode || '').toUpperCase() === code) {
+              targetFarm = state.farmsData[fId].farm;
+              break;
             }
           }
         }
-        if (!targetFarm) {
-          return alert(`Code d'invitation "${code}" introuvable. Veuillez vérifier le code fourni par votre gérant.`);
+      }
+
+      // 2. Recherche sur Firebase Cloud Firestore
+      if (!targetFarm && firestoreDb) {
+        try {
+          // A. Recherche directe par document dans invite_codes
+          const codeSnap = await firestoreDb.collection('invite_codes').doc(code).get();
+          if (codeSnap.exists) {
+            const cData = codeSnap.data();
+            const farmSnap = await firestoreDb.collection('farms').doc(cData.farmId).get();
+            if (farmSnap.exists) {
+              remoteFarmFullPayload = farmSnap.data();
+              targetFarm = remoteFarmFullPayload.farm || {
+                id: cData.farmId,
+                name: cData.farmName || 'Ferme Pleurotes',
+                inviteCode: code
+              };
+            }
+          }
+
+          // B. Fallback : requête directe dans 'farms'
+          if (!targetFarm) {
+            const q1 = await firestoreDb.collection('farms').where('inviteCode', '==', code).get();
+            if (!q1.empty) {
+              remoteFarmFullPayload = q1.docs[0].data();
+              targetFarm = remoteFarmFullPayload.farm || {
+                id: q1.docs[0].id,
+                name: remoteFarmFullPayload.name || 'Ferme Pleurotes',
+                inviteCode: code
+              };
+            }
+          }
+        } catch (cloudErr) {
+          console.warn('Erreur interrogation Cloud Firestore:', cloudErr);
         }
-      } else {
-        targetFarm = state.farm || { id: 'farm_01', name: 'Ferme Moura Pleurotes', inviteCode: 'MYCO-MOURA-2026' };
+      }
+
+      if (!targetFarm) {
+        if (joinBtn) {
+          joinBtn.disabled = false;
+          joinBtn.innerHTML = originalBtnHtml;
+        }
+        return alert(`Code d'invitation "${codeRaw}" introuvable sur le Cloud.\n\nVeuillez vérifier :\n1. Que le code est bien orthographié\n2. Que le téléphone du gérant a bien eu une connexion internet lors de la création de la ferme.`);
+      }
+
+      // 3. Charger la ferme distante dans la mémoire de ce téléphone
+      if (remoteFarmFullPayload) {
+        if (!state.farmsData) state.farmsData = {};
+        state.farmsData[targetFarm.id] = {
+          ...remoteFarmFullPayload,
+          farm: targetFarm
+        };
+        if (!state.farms) state.farms = [];
+        if (!state.farms.some(f => f.id === targetFarm.id)) {
+          state.farms.push(targetFarm);
+        }
       }
 
       // Si la ferme cible est différente de la ferme active, basculer d'abord
-      if (state.farm && targetFarm.id !== state.farm.id) {
-        switchActiveFarm(targetFarm.id);
+      if (!state.farm || targetFarm.id !== state.farm.id) {
+        saveCurrentFarmData();
+        loadFarmData(targetFarm.id);
       }
 
       const newUserId = 'usr_' + Date.now();
@@ -7669,18 +7810,35 @@
       localStorage.setItem('mycotrack_saved_user_id', newUser.id);
       saveState();
 
-      triggerSystemPush(
-        `👥 Nouveau Membre d'Équipe`,
-        `${name} a rejoint la ferme comme ${roleReq === 'delivery' ? 'Livreur' : 'Ouvrier Culture'}.`,
-        () => switchTab('carnet', 'team'),
-        'team'
-      );
+      // Synchronisation immédiate du nouveau membre sur Firebase Cloud
+      if (firestoreDb && targetFarm) {
+        try {
+          await firestoreDb.collection('farms').doc(targetFarm.id).set({
+            users: state.users,
+            deliverers: state.deliverers || [],
+            notifications: firebase.firestore.FieldValue.arrayUnion({
+              id: 'notif_' + Date.now(),
+              title: '👥 Nouveau membre',
+              body: `${name} a rejoint l'exploitation en tant que ${newUser.title}`,
+              date: 'Aujourd\'hui',
+              read: false
+            }),
+            lastSyncedAt: new Date().toISOString()
+          }, { merge: true });
+          console.log('☁️ Nouveau membre synchronisé sur Firebase Cloud.');
+        } catch (syncErr) {
+          console.warn('Note sync membre Firestore:', syncErr);
+        }
+      }
 
       setRole(roleReq);
-      showToast(`Bienvenue ${name} ! Votre compte ${roleReq.toUpperCase()} est actif (PIN: ${pin}).`);
+      showToast(`Bienvenue ${name} ! Votre adhésion à "${targetFarm.name}" est validée (PIN: ${pin}).`);
     }
 
-    function submitCreateFarmFromPortal() {
+
+
+    
+    async function submitCreateFarmFromPortal() {
       const farmName = (document.getElementById('portal-create-farm-name')?.value || '').trim();
       const ownerName = (document.getElementById('portal-create-owner-name')?.value || '').trim();
       const ownerPhone = (document.getElementById('portal-create-owner-phone')?.value || '').trim();
@@ -7691,8 +7849,15 @@
         return alert('Veuillez remplir le nom de la ferme, votre nom et votre email.');
       }
 
+      const createBtn = document.querySelector('button[onclick="submitCreateFarmFromPortal()"]');
+      const origBtnHtml = createBtn ? createBtn.innerHTML : '';
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<span>⏳</span> <span>Publication de la ferme sur le Cloud...</span>';
+      }
+
       const codeSuffix = Math.floor(1000 + Math.random() * 9000);
-      const inviteCode = 'MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix;
+      const inviteCode = ('MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix).toUpperCase();
       const farmId = 'farm_' + Date.now();
       const ownerId = 'usr_' + Date.now();
 
@@ -7717,7 +7882,6 @@
         title: 'Propriétaire & Gérant'
       };
 
-      // Nouveaux stocks de départ avec quantités à 0 pour saisie du stock réel
       const starterStocks = [
         { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
         { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
@@ -7725,7 +7889,6 @@
         { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
       ];
 
-      // Enregistrer les données de la ferme précédente
       saveCurrentFarmData();
 
       if (!state.farms) state.farms = [];
@@ -7759,222 +7922,31 @@
 
       // Basculer sur la nouvelle ferme
       switchActiveFarm(farmId, ownerUser);
-      showToast(`Ferme "${farmName}" créée avec succès ! Bienvenue ${ownerName}. Code : ${inviteCode}`);
-    }
 
-    function openSignUpFormModal() {
-      showModal(`
-        <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-          <span>📝</span> <span>Créer un Compte ou une Nouvelle Ferme</span>
-        </h3>
-        <p class="text-[11px] text-[#888] mb-3">Ajoutez un collaborateur à votre ferme actuelle ou créez un tout nouvel espace SaaS.</p>
-        
-        <div class="space-y-2 text-xs">
-          <div>
-            <label class="text-[#888] block mb-1">Nom & Prénom *</label>
-            <input id="signup-name" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-bold" placeholder="ex: Khaled Belkacem">
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-[#888] block mb-1">Téléphone mobile *</label>
-              <input id="signup-phone" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-mono" placeholder="0661223344" value="06">
-            </div>
-            <div>
-              <label class="text-[#888] block mb-1">Email</label>
-              <input id="signup-email" type="email" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white" placeholder="khaled@ferme.dz">
-            </div>
-          </div>
+      // Publication immédiate sur Firebase Cloud
+      if (firestoreDb) {
+        try {
+          await firestoreDb.collection('farms').doc(farmId).set({
+            ...state.farmsData[farmId],
+            inviteCode: inviteCode,
+            lastSyncedAt: new Date().toISOString()
+          }, { merge: true });
 
-          <!-- Choix : Rejoindre la ferme OU Créer ma propre ferme -->
-          <div class="p-3 bg-[#142214] rounded-2xl border border-[#2d4a2d] space-y-2 mt-2">
-            <label class="text-[#7bc67e] font-bold block">Type d'opération :</label>
-            <div class="space-y-1.5">
-              <label class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-[#1f3a1f]">
-                <input type="radio" name="signup-mode" value="join" checked onchange="toggleSignUpMode(this.value)" class="accent-[#4a9e4e]">
-                <span class="text-white font-semibold">🤝 Rejoindre la ferme active (${state.farm ? state.farm.name : 'Ferme Moura'})</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-[#1f3a1f]">
-                <input type="radio" name="signup-mode" value="create" onchange="toggleSignUpMode(this.value)" class="accent-[#4a9e4e]">
-                <span class="text-white font-semibold">👑 Créer une NOUVELLE ferme indépendante</span>
-              </label>
-            </div>
-
-            <!-- Si rejoindre -->
-            <div id="signup-join-box" class="pt-2 border-t border-[#2d4a2d]/60 space-y-2">
-              <div>
-                <label class="text-[10px] text-[#aaa] block mb-1">Rôle dans la ferme :</label>
-                <select id="signup-role" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-semibold">
-                  <option value="culture">🍄 Ouvrier Culture & Expédition</option>
-                  <option value="delivery">🛵 Livreur Express</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-[10px] text-[#aaa] block mb-1">Code PIN (4 chiffres) :</label>
-                <input id="signup-pin" type="text" maxlength="4" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-[#7bc67e] font-mono font-bold text-center tracking-widest" value="1234">
-              </div>
-            </div>
-
-            <!-- Si créer -->
-            <div id="signup-create-box" class="hidden pt-2 border-t border-[#2d4a2d]/60 space-y-2">
-              <div>
-                <label class="text-[10px] text-[#aaa] block mb-1">Nom de la nouvelle ferme :</label>
-                <input id="signup-farm-name" class="w-full bg-[#0f1a0f] border border-[#7bc67e] rounded-xl p-2 text-white text-xs font-semibold" placeholder="ex: Champignonnière des Aurès">
-              </div>
-              <div>
-                <label class="text-[10px] text-[#aaa] block mb-1">Mot de passe Administrateur :</label>
-                <input id="signup-pass" type="password" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2 text-white font-mono" value="password123">
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-2 flex gap-2">
-            <button onclick="openAuthModal()" class="flex-1 py-2.5 bg-[#2d4a2d] rounded-xl text-white font-bold">Retour</button>
-            <button onclick="saveNewUserSignUp()" class="flex-1 py-2.5 bg-[#4a9e4e] rounded-xl text-white font-bold shadow hover:bg-emerald-600">
-              Valider l'Inscription
-            </button>
-          </div>
-        </div>
-      `);
-    }
-
-    function toggleSignUpMode(mode) {
-      const joinBox = document.getElementById('signup-join-box');
-      const createBox = document.getElementById('signup-create-box');
-      if (mode === 'create') {
-        joinBox.classList.add('hidden');
-        createBox.classList.remove('hidden');
-      } else {
-        createBox.classList.add('hidden');
-        joinBox.classList.remove('hidden');
-      }
-    }
-
-    function saveNewUserSignUp() {
-      const name = (document.getElementById('signup-name')?.value || '').trim();
-      const phone = (document.getElementById('signup-phone')?.value || '').trim();
-      const email = (document.getElementById('signup-email')?.value || '').trim() || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@ferme.dz`;
-      const mode = document.querySelector('input[name="signup-mode"]:checked')?.value || 'join';
-
-      if (!name) return alert('Veuillez saisir au moins un nom.');
-
-      if (mode === 'create') {
-        const farmName = (document.getElementById('signup-farm-name')?.value || '').trim() || ('Ferme de ' + name);
-        const pass = (document.getElementById('signup-pass')?.value || '').trim() || 'password123';
-        const codeSuffix = Math.floor(1000 + Math.random() * 9000);
-        const inviteCode = 'MYCO-' + name.slice(0, 4).toUpperCase() + '-' + codeSuffix;
-        const farmId = 'farm_' + Date.now();
-        const ownerId = 'usr_' + Date.now();
-        
-        const newFarm = {
-          id: farmId,
-          name: farmName,
-          inviteCode: inviteCode,
-          ownerId: ownerId,
-          createdAt: new Date().toISOString().slice(0, 10)
-        };
-
-        const ownerUser = {
-          id: ownerId,
-          name: name,
-          email: email,
-          phone: phone,
-          role: 'admin',
-          password: pass,
-          pin: '1234',
-          farmId: farmId,
-          status: 'active',
-          title: 'Propriétaire & Gérant'
-        };
-
-        const starterStocks = [
-          { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
-          { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
-          { id: 'stk_' + farmId + '_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
-          { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
-        ];
-
-        saveCurrentFarmData();
-
-        if (!state.farms) state.farms = [];
-        state.farms.push(newFarm);
-
-        if (!state.farmsData) state.farmsData = {};
-        state.farmsData[farmId] = {
-          farm: newFarm,
-          users: [ ownerUser ],
-          notifications: [
-            { id: 'notif_' + Date.now(), title: '🎉 Bienvenue sur MycoTrack Pro', body: 'Votre exploitation SaaS ' + farmName + ' est créée et prête !', type: 'system', date: 'Aujourd\'hui', read: false }
-          ],
-          deliverers: [],
-          clients: [],
-          deliveries: [],
-          strains: [
-            'Pleurote Gris HK35',
-            'Pleurote Jaune (Cornucopiae)',
-            'Pleurote Blanc Sporesol',
-            'Pleurote Plein Air (Ostreatus)',
-            'Shiitaké (Lentinula edodes)'
-          ],
-          stocks: starterStocks,
-          tables: [],
-          batches: [],
-          bags: [],
-          units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
-          expenseCategories: initialSeedState.expenseCategories,
-          expenses: []
-        };
-
-        switchActiveFarm(farmId, ownerUser);
-        closeModal();
-        showToast(`Ferme "${farmName}" créée avec succès ! Bienvenue ${name}. Code : ${inviteCode}`);
-      } else {
-        const role = document.getElementById('signup-role')?.value || 'culture';
-        const pin = (document.getElementById('signup-pin')?.value || '').trim() || '1234';
-        const newUserId = 'usr_' + Date.now();
-        const newUser = {
-          id: newUserId,
-          name: name,
-          email: email,
-          phone: phone,
-          role: role,
-          pin: pin,
-          farmId: state.farm ? state.farm.id : 'farm_01',
-          status: 'active',
-          title: role === 'delivery' ? 'Livreur Express' : 'Ouvrier Culture & Expédition'
-        };
-        if (!state.users) state.users = [];
-        state.users.push(newUser);
-
-        if (role === 'delivery') {
-          if (!state.deliverers) state.deliverers = [];
-          state.deliverers.push({
-            id: 'deliv_' + Date.now(),
-            name: name,
-            phone: phone,
-            vehicle: 'Moto rapide',
-            address: 'Alger',
-            fee: 350,
-            status: 'active'
-          });
+          await firestoreDb.collection('invite_codes').doc(inviteCode).set({
+            farmId: farmId,
+            farmName: farmName,
+            ownerName: ownerName,
+            createdAt: new Date().toISOString()
+          }, { merge: true });
+          console.log('☁️ Ferme et code d\'invitation publiés sur Firestore :', inviteCode);
+        } catch (cloudErr) {
+          console.warn('Erreur publication Cloud Firestore:', cloudErr);
         }
-
-        state.currentUser = newUser;
-        currentRole = role;
-        if (role === 'delivery') {
-          currentTab = 'delivery';
-        } else {
-          currentTab = 'production';
-        }
-
-        localStorage.setItem('mycotrack_session_active', 'true');
-        localStorage.setItem('mycotrack_saved_user_id', newUser.id);
-        saveState();
-        closeModal();
-        setRole(role);
-        showToast(`Bienvenue ${name} ! Votre compte ${role.toUpperCase()} est actif (PIN: ${pin}).`);
       }
-    }
 
+      showToast(`Ferme "${farmName}" créée avec succès ! Code d'invitation : ${inviteCode}`);
+    }
+  
     function approveUserRole(userId, role) {
       const user = (state.users || []).find(u => u.id === userId);
       if (user) {

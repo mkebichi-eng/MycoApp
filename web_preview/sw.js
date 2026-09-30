@@ -36,6 +36,11 @@ self.addEventListener('activate', (event) => {
 
 // Network-First with Cache Fallback strategy
 self.addEventListener('fetch', (event) => {
+  // Ignore non-http(s) schemes like tel:, mailto:, sms:
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   // Let Firebase / Firestore APIs handle their own offline caching
   if (event.request.url.includes('firestore.googleapis.com') ||
       event.request.url.includes('identitytoolkit.googleapis.com') ||
