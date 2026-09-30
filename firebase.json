@@ -6,6 +6,25 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "public": "web_preview",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099

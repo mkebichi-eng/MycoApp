@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a180a"/>
+      <stop offset="50%" stop-color="#142614"/>
+      <stop offset="100%" stop-color="#050e05"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7bc67e"/>
+      <stop offset="100%" stop-color="#3d8b41"/>
+    </linearGradient>
+    <linearGradient id="stemGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e0ebd8"/>
+      <stop offset="50%" stop-color="#f8faf6"/>
+      <stop offset="100%" stop-color="#c5d8bc"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded app squircle -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)" stroke="#4a9e4e" stroke-width="8"/>
+
+  <!-- Subtle outer mycelium spore dots -->
+  <circle cx="120" cy="120" r="4" fill="#7bc67e" opacity="0.4"/>
+  <circle cx="390" cy="140" r="5" fill="#7bc67e" opacity="0.3"/>
+  <circle cx="100" cy="380" r="3" fill="#7bc67e" opacity="0.4"/>
+  <circle cx="410" cy="390" r="4" fill="#7bc67e" opacity="0.3"/>
+
+  <!-- Group for Mushroom with shadow -->
+  <g filter="url(#shadow)">
+    <!-- Central Main Mushroom Stem -->
+    <path d="M228 260 C228 220, 284 220, 284 260 L292 380 C292 396, 220 396, 220 380 Z" fill="url(#stemGrad)"/>
+    
+    <!-- Left baby mushroom stem -->
+    <path d="M175 310 C175 285, 205 285, 205 310 L210 375 C210 385, 170 385, 170 375 Z" fill="#d2dfcb"/>
+
+    <!-- Left baby mushroom cap -->
+    <path d="M145 315 C145 280, 235 280, 235 315 C215 320, 165 320, 145 315 Z" fill="#62b466"/>
+
+    <!-- Main Oyster Mushroom Cap (Fan shape / Pleurote) -->
+    <path d="M130 250 C130 145, 382 145, 382 250 C340 262, 310 255, 256 258 C202 255, 172 262, 130 250 Z" fill="url(#glowGrad)"/>
+
+    <!-- Cap gills & texture -->
+    <path d="M165 248 Q256 220 347 248" stroke="#316e34" stroke-width="3" fill="none" opacity="0.7"/>
+    <path d="M190 240 Q256 210 322 240" stroke="#316e34" stroke-width="2.5" fill="none" opacity="0.5"/>
+    <path d="M215 230 Q256 205 297 230" stroke="#316e34" stroke-width="2" fill="none" opacity="0.4"/>
+  </g>
+
+  <!-- Brand Label Bottom -->
+  <text x="256" y="445" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="3">MYCOTRACK</text>
+  <text x="256" y="472" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" fill="#7bc67e" text-anchor="middle" letter-spacing="5">PRO SAAS</text>
+</svg>

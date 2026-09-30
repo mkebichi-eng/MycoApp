@@ -3,8 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>MycoTrack — Gestion Ventes, Livraisons & Finances</title>
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <title>MycoTrack Pro — Gestion & Traçabilité Mycologique</title>
+  
+  <!-- PWA & iOS Web App Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#142214">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MycoTrack Pro">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
+  <!-- Tailwind CSS -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js">
+    // Auto-init Firebase & PWA Service Worker
+    window.addEventListener('load', () => {
+      initFirebaseCloud();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').then(() => console.log('PWA Service Worker active.')).catch(e => console.log('SW note:', e));
+      }
+      checkIosPwaBanner();
+    });
+
+    function checkIosPwaBanner() {
+      const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+      const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+      if (isIos && !isStandalone && !sessionStorage.getItem('myco_ios_banner_dismissed')) {
+        showToast("📲 Pour installer sur iPhone : appuyez sur Partager ⎋ puis 'Sur l\'écran d\'accueil'");
+        sessionStorage.setItem('myco_ios_banner_dismissed', 'true');
+      }
+    }
+  </script>
+
+  <!-- Firebase Web SDK (Compat mode for cloud sync & offline persistence) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
   <style>
     body {
       background-color: #050a05;
@@ -62,17 +98,19 @@
       <span class="text-2xl">🍄</span>
       <div>
         <h1 class="text-sm font-bold text-white flex items-center gap-1.5">
-          <span>MycoTrack</span>
-          <span class="text-[9px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-1.5 py-0.5 rounded-full font-mono">FINANCES & COURSES</span>
+          <span>MycoTrack Pro</span>
+          <span class="text-[9px] bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/30 px-1.5 py-0.5 rounded-full font-mono">SAAS PRODUCTION</span>
         </h1>
-        <p class="text-[10px] text-[#888]">Gestion Ventes • Dispatch Livreur • Décompte Caisse</p>
+        <p class="text-[10px] text-[#888]">Gestion & Traçabilité Mycologique • Multi-Fermes</p>
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <button onclick="resetDemoData()" class="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded bg-[#0f1a0f] border border-[#2d4a2d]">
-        🔄 Reset
-      </button>
+      <span id="desktop-cloud-status" class="text-[10px] text-[#7bc67e] bg-[#0f1a0f] border border-[#2d4a2d] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-[#7bc67e] animate-pulse"></span>
+        <span>☁️ Cloud Firestore</span>
+      </span>
     </div>
+  </div>
   </div>
 
   <!-- Main Mobile App Shell (Full screen on phone, Mockup on desktop) -->
@@ -205,226 +243,19 @@
     let currentRole = 'admin';
     let currentTab = 'dashboard';
 
+    // ==========================================
+    // ÉTAT VIERGE INITIAL DE PRODUCTION (SaaS)
+    // Zéro fausse donnée, prêt pour exploitation réelle
+    // ==========================================
     const initialSeedState = {
-      farm: {
-        id: 'farm_01',
-        name: 'Ferme Moura Pleurotes',
-        inviteCode: 'MYCO-MOURA-2026',
-        ownerId: 'usr_moura',
-        createdAt: '2026-09-01'
-      },
-      farms: [
-        {
-          id: 'farm_01',
-          name: 'Ferme Moura Pleurotes',
-          inviteCode: 'MYCO-MOURA-2026',
-          ownerId: 'usr_moura',
-          createdAt: '2026-09-01'
-        }
-      ],
-      users: [
-        { id: 'usr_moura', name: 'Moura', email: 'moura@ferme.dz', phone: '0550000001', role: 'admin', password: 'password123', farmId: 'farm_01', status: 'active', title: 'Propriétaire & Gérant' },
-        { id: 'usr_samir', name: 'Samir Culture', email: 'samir@ferme.dz', phone: '0661112233', role: 'culture', pin: '1234', farmId: 'farm_01', status: 'active', title: 'Ouvrier Culture & Expédition' },
-        { id: 'usr_yacine', name: 'Yacine Livreur', email: 'yacine@ferme.dz', phone: '0772223344', role: 'delivery', pin: '5678', farmId: 'farm_01', status: 'active', title: 'Livreur Principal' }
-      ],
-      currentUser: null, // Par défaut non connecté => Ouverture directe sur le portail d'identification
-      notifications: [
-        { id: 'notif_01', title: '⚠️ Alerte Stock : Paille', body: 'Stock de paille à 12 bottes (proche seuil 5).', type: 'stock', date: '28 Sep 14:00', read: false },
-        { id: 'notif_02', title: '🛵 Course assignée', body: 'Supermarché Bio Oasis assigné à Karim Meziani.', type: 'delivery', date: '28 Sep 12:30', read: false },
-        { id: 'notif_03', title: '🤝 Demande d\'adhésion', body: 'Amina Benali souhaite rejoindre votre ferme avec le code MYCO-MOURA-2026.', type: 'team', date: '28 Sep 11:15', read: false }
-      ],
-      deliverers: [
-        { id: 'deliv_karim', name: 'Karim Meziani', phone: '+213551001122', vehicle: 'Moto rapide', address: '14 Rue Didouche Mourad, Alger', fee: 350, status: 'active' },
-        { id: 'deliv_yacine', name: 'Yacine Dahmani', phone: '+213662223344', vehicle: 'Kangoo (Gros volume)', address: 'Centre Commercial El Qods, Chéraga', fee: 500, status: 'active' },
-        { id: 'deliv_amine', name: 'Amine Benali', phone: '+213773334455', vehicle: 'Scooter urbain', address: 'Coopérative El Feth, Kouba', fee: 300, status: 'active' }
-      ],
-      clients: [
-        { id: 'cli_01', name: "Restaurant Le Cèdre Bleu", contact: "Chef Youssef", phone: "+213550112233", address: "14 Rue Didouche Mourad", city: "Alger", price: 1200, due: 0, type: "Restaurant" },
-        { id: 'cli_02', name: "Pizzeria Bella Vista", contact: "Sofiane", phone: "+213661445566", address: "8 Boulevard Colonel Amirouche", city: "Alger", price: 1100, due: 5500, type: "Pizzeria" },
-        { id: 'cli_03', name: "Supermarché Bio Oasis", contact: "Mme Meriem", phone: "+213770778899", address: "Centre Commercial El Qods, Chéraga", city: "Chéraga", price: 1350, due: 0, type: "Supermarché" },
-        { id: 'cli_04', name: "Hôtel El Aurassi", contact: "Direction Achats", phone: "+213554443322", address: "Boulevard Frantz Fanon", city: "Alger", price: 1250, due: 0, type: "Hôtel" },
-        { id: 'cli_05', name: "Traiteur Gourmand", contact: "Amine", phone: "+213665554433", address: "Coopérative El Feth, Kouba", city: "Alger", price: 1250, due: 2500, type: "Traiteur" }
-      ],
-      deliveries: [
-        // 5 VENTES LES PLUS RÉCENTES (Affichées par défaut)
-        {
-          id: 'vte_008',
-          orderNumber: 'VTE-2026-008',
-          clientId: 'cli_03',
-          clientName: 'Supermarché Bio Oasis',
-          clientPhone: '+213770778899',
-          clientAddress: 'Centre Commercial El Qods, Chéraga',
-          quantityKg: 15.0,
-          pricePerKg: 1350,
-          totalAmount: 20250,
-          delivererId: 'deliv_karim',
-          delivererName: 'Karim Meziani (Moto)',
-          deliveryFee: 400,
-          status: 'pending_acceptance',
-          isClientPaid: false,
-          amountCollected: 0,
-          clientRemainingDue: 20250,
-          delivererFeeDeducted: 0,
-          netCashToFarm: 0,
-          dateIso: '2026-09-24',
-          createdAt: '24 Sep 12:30'
-        },
-        {
-          id: 'vte_007',
-          orderNumber: 'VTE-2026-007',
-          clientId: 'cli_04',
-          clientName: 'Hôtel El Aurassi',
-          clientPhone: '+213554443322',
-          clientAddress: 'Boulevard Frantz Fanon, Alger',
-          quantityKg: 12.0,
-          pricePerKg: 1250,
-          totalAmount: 15000,
-          delivererId: 'deliv_yacine',
-          delivererName: 'Yacine Dahmani (Kangoo)',
-          deliveryFee: 500,
-          status: 'in_delivery',
-          isClientPaid: false,
-          amountCollected: 0,
-          clientRemainingDue: 15000,
-          delivererFeeDeducted: 0,
-          netCashToFarm: 0,
-          dateIso: '2026-09-24',
-          createdAt: '24 Sep 10:15'
-        },
-        {
-          id: 'vte_006',
-          orderNumber: 'VTE-2026-006',
-          clientId: 'cli_01',
-          clientName: 'Restaurant Le Cèdre Bleu',
-          clientPhone: '+213550112233',
-          clientAddress: '14 Rue Didouche Mourad, Alger',
-          quantityKg: 8.5,
-          pricePerKg: 1200,
-          totalAmount: 10200,
-          delivererId: 'deliv_karim',
-          delivererName: 'Karim Meziani (Moto)',
-          deliveryFee: 350,
-          status: 'settled',
-          isClientPaid: true,
-          amountCollected: 10200,
-          clientRemainingDue: 0,
-          delivererFeeDeducted: 350,
-          netCashToFarm: 9850,
-          dateIso: '2026-09-23',
-          createdAt: '23 Sep 16:00'
-        },
-        {
-          id: 'vte_005',
-          orderNumber: 'VTE-2026-005',
-          clientId: 'cli_02',
-          clientName: 'Pizzeria Bella Vista',
-          clientPhone: '+213661445566',
-          clientAddress: '8 Boulevard Colonel Amirouche, Alger',
-          quantityKg: 10.0,
-          pricePerKg: 1100,
-          totalAmount: 11000,
-          delivererId: 'deliv_yacine',
-          delivererName: 'Yacine Dahmani (Kangoo)',
-          deliveryFee: 500,
-          status: 'settled',
-          isClientPaid: false,
-          amountCollected: 5500,
-          clientRemainingDue: 5500,
-          delivererFeeDeducted: 500,
-          netCashToFarm: 5000,
-          dateIso: '2026-09-23',
-          createdAt: '23 Sep 11:30'
-        },
-        {
-          id: 'vte_004',
-          orderNumber: 'VTE-2026-004',
-          clientId: 'cli_05',
-          clientName: 'Traiteur Gourmand',
-          clientPhone: '+213665554433',
-          clientAddress: 'Coopérative El Feth, Kouba',
-          quantityKg: 6.0,
-          pricePerKg: 1250,
-          totalAmount: 7500,
-          delivererId: 'deliv_amine',
-          delivererName: 'Amine Benali (Scooter)',
-          deliveryFee: 300,
-          status: 'settled',
-          isClientPaid: false,
-          amountCollected: 5000,
-          clientRemainingDue: 2500,
-          delivererFeeDeducted: 300,
-          netCashToFarm: 4700,
-          dateIso: '2026-09-22',
-          createdAt: '22 Sep 15:00'
-        },
-        // VENTES PLUS ANCIENNES (Masquées par défaut - accessibles par filtre date/recherche)
-        {
-          id: 'vte_003',
-          orderNumber: 'VTE-2026-003',
-          clientId: 'cli_01',
-          clientName: 'Restaurant Le Cèdre Bleu',
-          clientPhone: '+213550112233',
-          clientAddress: '14 Rue Didouche Mourad, Alger',
-          quantityKg: 7.0,
-          pricePerKg: 1200,
-          totalAmount: 8400,
-          delivererId: 'deliv_karim',
-          delivererName: 'Karim Meziani (Moto)',
-          deliveryFee: 350,
-          status: 'settled',
-          isClientPaid: true,
-          amountCollected: 8400,
-          clientRemainingDue: 0,
-          delivererFeeDeducted: 350,
-          netCashToFarm: 8050,
-          dateIso: '2026-09-21',
-          createdAt: '21 Sep 14:00'
-        },
-        {
-          id: 'vte_002',
-          orderNumber: 'VTE-2026-002',
-          clientId: 'cli_02',
-          clientName: 'Pizzeria Bella Vista',
-          clientPhone: '+213661445566',
-          clientAddress: '8 Boulevard Colonel Amirouche, Alger',
-          quantityKg: 5.0,
-          pricePerKg: 1100,
-          totalAmount: 5500,
-          delivererId: 'deliv_amine',
-          delivererName: 'Amine Benali (Scooter)',
-          deliveryFee: 300,
-          status: 'settled',
-          isClientPaid: true,
-          amountCollected: 5500,
-          clientRemainingDue: 0,
-          delivererFeeDeducted: 300,
-          netCashToFarm: 5200,
-          dateIso: '2026-09-20',
-          createdAt: '20 Sep 09:45'
-        },
-        {
-          id: 'vte_001',
-          orderNumber: 'VTE-2026-001',
-          clientId: 'cli_03',
-          clientName: 'Supermarché Bio Oasis',
-          clientPhone: '+213770778899',
-          clientAddress: 'Centre Commercial El Qods, Chéraga',
-          quantityKg: 14.0,
-          pricePerKg: 1350,
-          totalAmount: 18900,
-          delivererId: 'deliv_yacine',
-          delivererName: 'Yacine Dahmani (Kangoo)',
-          deliveryFee: 500,
-          status: 'settled',
-          isClientPaid: true,
-          amountCollected: 18900,
-          clientRemainingDue: 0,
-          delivererFeeDeducted: 500,
-          netCashToFarm: 18400,
-          dateIso: '2026-09-18',
-          createdAt: '18 Sep 11:00'
-        }
-      ],
+      farm: null,
+      farms: [],
+      users: [],
+      currentUser: null,
+      notifications: [],
+      deliverers: [],
+      clients: [],
+      deliveries: [],
       strains: [
         'Pleurote Gris HK35',
         'Pleurote Jaune (Cornucopiae)',
@@ -433,119 +264,26 @@
         'Shiitaké (Lentinula edodes)'
       ],
       stocks: [
-        { id: 'stk_01', name: "Paille de blé (Bottes)", category: "Matière première", quantity: 45, unit: "bottes", threshold: 10, cost: 450 },
-        { id: 'stk_spawn_hk35', name: "Mycélium Pleurote Gris HK35", strain: "Pleurote Gris HK35", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 6, unit: "sacs", threshold: 2, cost: 1800 },
-        { id: 'stk_spawn_jaune', name: "Mycélium Pleurote Jaune", strain: "Pleurote Jaune (Cornucopiae)", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 4, unit: "sacs", threshold: 2, cost: 1900 },
-        { id: 'stk_spawn_blanc', name: "Mycélium Pleurote Blanc Sporesol", strain: "Pleurote Blanc Sporesol", bagWeightKg: 2.0, category: "Semence/Blanc", quantity: 2, unit: "sacs", threshold: 1, cost: 1850 },
-        { id: 'stk_03', name: "Sacs de culture micro-perforés", category: "Consommable", quantity: 120, unit: "unités", threshold: 50, cost: 25 },
-        { id: 'stk_04', name: "Seaux plastique réutilisables", category: "Équipement", quantity: 24, unit: "unités", threshold: 10, cost: 250 },
-        { id: 'stk_05', name: "Alcool à 70° désinfection", category: "Sanitation", quantity: 12, unit: "L", threshold: 5, cost: 450 },
-        { id: 'stk_06', name: "Produit décontamination sol", category: "Sanitation", quantity: 3.5, unit: "L", threshold: 4.0, cost: 1200 }
+        { id: 'stk_init_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
+        { id: 'stk_init_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
+        { id: 'stk_init_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
+        { id: 'stk_init_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
       ],
-      tables: [
-        {
-          id: 'TAB-01',
-          name: 'Table Inox 1 (Pleurote Gris)',
-          date: '2026-09-08',
-          weekId: '2026-W37',
-          strain: 'Pleurote Gris HK35',
-          spawnStockId: 'stk_spawn_hk35',
-          substrate: 'Paille de blé pasteurisée',
-          strawBottes: 1.0,
-          spawnSacs: 1.5,
-          bagCount: 16,
-          bagsCreated: 14,
-          bucketsCreated: 2,
-          status: 'Actif',
-          notes: 'Ensemencement table inox principale - 1 botte de paille + 1.5 sacs de blanc 2kg'
-        },
-        {
-          id: 'TAB-02',
-          name: 'Table Inox 2 (Pleurote Gris)',
-          date: '2026-09-18',
-          weekId: '2026-W38',
-          strain: 'Pleurote Gris HK35',
-          spawnStockId: 'stk_spawn_hk35',
-          substrate: 'Paille de blé pasteurisée',
-          strawBottes: 1.0,
-          spawnSacs: 1.5,
-          bagCount: 15,
-          bagsCreated: 15,
-          bucketsCreated: 0,
-          status: 'Actif',
-          notes: 'Lot en fin d\'incubation - transfert fructification imminent'
-        }
-      ],
-      batches: [
-        { id: 'TAB-01', strain: 'Pleurote Gris HK35', substrate: 'Paille de blé pasteurisée', strawDry: 25, strawWet: 80, strawBottes: 1, spawnSacs: 1.5, bagCount: 16, date: '2026-09-08', status: 'Actif' }
-      ],
-      bags: [
-        { id: 'TAB01-S01', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'fruiting', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-21', harvests: [{ flush: 1, date: '2026-09-24', weightKg: 1.25 }], harvestedKg: 1.25 },
-        { id: 'TAB01-S02', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'fruiting', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-21', harvests: [{ flush: 1, date: '2026-09-24', weightKg: 1.10 }], harvestedKg: 1.10 },
-        { id: 'TAB01-S03', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'fruiting', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-21', harvests: [{ flush: 1, date: '2026-09-24', weightKg: 0.95 }], harvestedKg: 0.95 },
-        { id: 'TAB01-B01', tableId: 'TAB-01', batchId: 'TAB-01', type: 'seau', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-22', harvests: [{ flush: 1, date: '2026-09-25', weightKg: 1.45 }], harvestedKg: 1.45 },
-        { id: 'TAB01-B02', tableId: 'TAB-01', batchId: 'TAB-01', type: 'seau', status: 'fruiting', weight: 5.0, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-22', harvests: [], harvestedKg: 0.0 },
-        { id: 'TAB01-S04', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'contaminated', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', contaminationDate: '2026-09-15', contaminationReason: 'Moisissure verte (Trichoderma)', harvests: [], harvestedKg: 0.0 },
-        { id: 'TAB01-S05', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'incubation', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', harvests: [], harvestedKg: 0.0 },
-        { id: 'TAB01-S06', tableId: 'TAB-01', batchId: 'TAB-01', type: 'sac', status: 'fruiting', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-08', fruitingDate: '2026-09-22', harvests: [{ flush: 1, date: '2026-09-25', weightKg: 1.05 }], harvestedKg: 1.05 },
-        { id: 'TAB02-S01', tableId: 'TAB-02', batchId: 'TAB-02', type: 'sac', status: 'incubation', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-18', harvests: [], harvestedKg: 0.0 },
-        { id: 'TAB02-S02', tableId: 'TAB-02', batchId: 'TAB-02', type: 'sac', status: 'incubation', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-18', harvests: [], harvestedKg: 0.0 },
-        { id: 'TAB02-S03', tableId: 'TAB-02', batchId: 'TAB-02', type: 'sac', status: 'incubation', weight: 4.5, strain: 'Pleurote Gris HK35', incubationDate: '2026-09-18', harvests: [], harvestedKg: 0.0 }
-      ],
-      units: ['kg', 'unités', 'L', 'g', 'bottes', 'rouleaux', 'sacs', 'cartons'],
+      tables: [],
+      batches: [],
+      bags: [],
+      units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
       expenseCategories: [
         'Matière première (Paille/Blanc)',
+        'Consommables (Sacs/Désinfectant)',
         'Sanitation & Hygiène',
-        'Consommables & Sacs',
         'Énergie (Sonelgaz/Eau)',
         'Transport & Carburant',
         'Outillage & Équipement',
         'Autre charge'
       ],
-      expenses: [
-        {
-          id: 'exp_01',
-          label: "Achat bottes de paille de blé",
-          amount: 4500,
-          category: "Matière première (Paille/Blanc)",
-          date: "15 Sep",
-          dateIso: "2026-09-15",
-          qty: 10,
-          unit: "bottes",
-          unitPrice: 450,
-          isStockable: true,
-          stockItemId: 'stk_01',
-          supplier: "Ferme Blida"
-        },
-        {
-          id: 'exp_02',
-          label: "Alcool à 70° & désinfectant",
-          amount: 2625,
-          category: "Sanitation & Hygiène",
-          date: "18 Sep",
-          dateIso: "2026-09-18",
-          qty: 5,
-          unit: "L",
-          unitPrice: 525,
-          isStockable: true,
-          stockItemId: 'stk_04',
-          supplier: "Pharmacie Pro"
-        },
-        {
-          id: 'exp_03',
-          label: "Carburant livraison Alger Centre",
-          amount: 1200,
-          category: "Transport & Carburant",
-          date: "21 Sep",
-          dateIso: "2026-09-21",
-          qty: 1,
-          unit: "forfait",
-          unitPrice: 1200,
-          isStockable: false,
-          stockItemId: null,
-          supplier: "Naftal"
-        }
-      ]
+      expenses: [],
+      farmsData: {}
     };
 
     function getWeekInfo(dateString) {
@@ -576,62 +314,140 @@
       return { weekId, weekLabel, shortTitle, weekNum };
     }
 
-    let storedState = JSON.parse(localStorage.getItem('mycotrack_state_v8') || 'null');
-    if (!storedState) {
-      const v7State = JSON.parse(localStorage.getItem('mycotrack_state_v7') || 'null') ||
-                      JSON.parse(localStorage.getItem('mycotrack_state_v6') || 'null');
-      if (v7State) {
-        storedState = {
-          ...initialSeedState,
-          ...v7State,
-          strains: (v7State.strains && v7State.strains.length > 0) ? v7State.strains : initialSeedState.strains,
-          stocks: (v7State.stocks && v7State.stocks.some(s => s.strain)) ? v7State.stocks : initialSeedState.stocks,
-          tables: (v7State.tables && v7State.tables.length > 0) ? v7State.tables.map(t => {
-            if (!t.weekId && t.date) {
-              const w = getWeekInfo(t.date);
-              return { ...t, weekId: w.weekId, weekLabel: w.weekLabel };
-            }
-            return t;
-          }) : initialSeedState.tables,
-          bags: (v7State.bags && v7State.bags.some(b => b.tableId)) ? v7State.bags : initialSeedState.bags
-        };
+    // Chargement de l'état de production vierge (Stockage local + Cloud Firestore)
+    let storedState = JSON.parse(localStorage.getItem('mycotrack_prod_v1') || 'null');
+    let state = storedState || JSON.parse(JSON.stringify(initialSeedState));
+
+    if (!state.strains || state.strains.length === 0) state.strains = initialSeedState.strains;
+    if (!state.stocks || state.stocks.length === 0) state.stocks = initialSeedState.stocks;
+    if (!state.tables) state.tables = [];
+    if (!state.bags) state.bags = [];
+    if (!state.farms) state.farms = [];
+    if (!state.farmsData) state.farmsData = {};
+    if (!state.users) state.users = [];
+    if (!state.deliverers) state.deliverers = [];
+    if (!state.clients) state.clients = [];
+    if (!state.deliveries) state.deliveries = [];
+    if (!state.expenses) state.expenses = [];
+    if (!state.notifications) state.notifications = [];
+    if (!state.units) state.units = initialSeedState.units;
+    if (!state.expenseCategories) state.expenseCategories = initialSeedState.expenseCategories;
+
+    // ==========================================
+    // MOTEUR FIREBASE CLOUD & OFFLINE PERSISTENCE
+    // ==========================================
+    let firebaseApp = null;
+    let firestoreDb = null;
+    let isCloudConnected = false;
+    let currentFarmSnapshotUnsubscribe = null;
+    let isSyncingToFirestore = false;
+
+    function initFirebaseCloud() {
+      try {
+        if (typeof firebase !== 'undefined') {
+          const firebaseConfig = {
+            apiKey: 'AIzaSyA5StGNbE15cDr7CmSOdcQZ0RHkOFFDhEI',
+            authDomain: 'mycoapp-ferme-69081.firebaseapp.com',
+            projectId: 'mycoapp-ferme-69081',
+            storageBucket: 'mycoapp-ferme-69081.firebasestorage.app',
+            messagingSenderId: '886418118468',
+            appId: '1:886418118468:web:2ed58397e1d3ce58f42911'
+          };
+          if (!firebase.apps.length) {
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+          } else {
+            firebaseApp = firebase.app();
+          }
+          firestoreDb = firebase.firestore();
+          // Active la persistance hors-ligne IndexedDB
+          firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
+            console.info('Persistence Firestore info:', err.code);
+          });
+          isCloudConnected = true;
+          updateCloudStatusIndicator(true);
+
+          if (state.farm && state.farm.id) {
+            setupFirestoreListenerForActiveFarm(state.farm.id);
+          }
+        } else {
+          updateCloudStatusIndicator(false);
+        }
+      } catch (err) {
+        console.warn('Firebase init (mode local/offline):', err);
+        updateCloudStatusIndicator(false);
       }
     }
-    let state = storedState || initialSeedState;
-    if (!state.strains) state.strains = initialSeedState.strains;
-    if (!state.tables || state.tables.length === 0) state.tables = initialSeedState.tables;
-    if (!state.bags || state.bags.length === 0 || !state.bags[0].tableId) state.bags = initialSeedState.bags;
 
-    // Garantir l'existence de la liste des fermes (SaaS Multi-Fermes)
-    if (!state.farms || state.farms.length === 0) {
-      state.farms = [state.farm || initialSeedState.farm];
-    }
-    if (!state.farm) {
-      state.farm = state.farms[0] || initialSeedState.farm;
+    function updateCloudStatusIndicator(connected) {
+      isCloudConnected = connected;
+      const deskPill = document.getElementById('desktop-cloud-status');
+      const mobPill = document.getElementById('mobile-cloud-status');
+      if (deskPill) {
+        deskPill.innerHTML = connected ? `
+          <span class="w-2 h-2 rounded-full bg-[#7bc67e] animate-pulse"></span>
+          <span>☁️ Firebase Connecté</span>
+        ` : `
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span>💾 Mode Hors-Ligne</span>
+        `;
+      }
+      if (mobPill) {
+        mobPill.innerHTML = connected ? '☁️ Sync' : '💾 Local';
+        mobPill.className = connected ? 
+          'text-[9px] text-[#7bc67e] bg-[#142214] border border-[#2d4a2d] px-1.5 py-0.5 rounded-md font-mono' :
+          'text-[9px] text-amber-400 bg-amber-950/40 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-mono';
+      }
     }
 
-    // Registre multi-fermes avec isolation hermétique des données par exploitation
-    if (!state.farmsData) {
-      state.farmsData = {};
+    async function syncCurrentFarmToFirestore() {
+      if (!firestoreDb || !state.farm || !state.farm.id) return;
+      try {
+        const farmId = state.farm.id;
+        saveCurrentFarmData();
+        const payload = state.farmsData[farmId];
+        if (!payload) return;
+        isSyncingToFirestore = true;
+        await firestoreDb.collection('farms').doc(farmId).set({
+          ...payload,
+          lastSyncedAt: new Date().toISOString()
+        }, { merge: true });
+        updateCloudStatusIndicator(true);
+      } catch (err) {
+        console.warn('Firestore sync note:', err.message);
+        updateCloudStatusIndicator(false);
+      } finally {
+        setTimeout(() => { isSyncingToFirestore = false; }, 600);
+      }
     }
-    const demoFarmId = (initialSeedState.farm && initialSeedState.farm.id) ? initialSeedState.farm.id : 'farm_01';
-    if (!state.farmsData[demoFarmId]) {
-      state.farmsData[demoFarmId] = {
-        farm: initialSeedState.farm,
-        users: JSON.parse(JSON.stringify(initialSeedState.users)),
-        notifications: JSON.parse(JSON.stringify(initialSeedState.notifications)),
-        deliverers: JSON.parse(JSON.stringify(initialSeedState.deliverers)),
-        clients: JSON.parse(JSON.stringify(initialSeedState.clients)),
-        deliveries: JSON.parse(JSON.stringify(initialSeedState.deliveries)),
-        strains: JSON.parse(JSON.stringify(initialSeedState.strains)),
-        stocks: JSON.parse(JSON.stringify(initialSeedState.stocks)),
-        tables: JSON.parse(JSON.stringify(initialSeedState.tables)),
-        batches: JSON.parse(JSON.stringify(initialSeedState.batches)),
-        bags: JSON.parse(JSON.stringify(initialSeedState.bags)),
-        units: JSON.parse(JSON.stringify(initialSeedState.units)),
-        expenseCategories: JSON.parse(JSON.stringify(initialSeedState.expenseCategories)),
-        expenses: JSON.parse(JSON.stringify(initialSeedState.expenses))
-      };
+
+    function setupFirestoreListenerForActiveFarm(farmId) {
+      if (!firestoreDb || !farmId) return;
+      if (currentFarmSnapshotUnsubscribe) {
+        currentFarmSnapshotUnsubscribe();
+        currentFarmSnapshotUnsubscribe = null;
+      }
+      try {
+        currentFarmSnapshotUnsubscribe = firestoreDb.collection('farms').doc(farmId)
+          .onSnapshot(doc => {
+            if (isSyncingToFirestore) return;
+            if (doc.exists) {
+              const remoteData = doc.data();
+              if (remoteData && state.farm && state.farm.id === farmId) {
+                state.farmsData[farmId] = {
+                  ...state.farmsData[farmId],
+                  ...remoteData
+                };
+                loadFarmData(farmId);
+                localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+                renderCurrentView();
+              }
+            }
+          }, err => {
+            console.warn('Snapshot listener info:', err.message);
+          });
+      } catch (e) {
+        console.warn('Listener setup error:', e);
+      }
     }
 
     function initFarmsDataIfNeeded() {
@@ -687,64 +503,31 @@
     function switchActiveFarm(farmId, targetUser = null) {
       saveCurrentFarmData();
       loadFarmData(farmId);
-
       if (targetUser) {
         state.currentUser = targetUser;
-      } else if (state.currentUser && (state.users || []).some(u => u.id === state.currentUser.id)) {
-        state.currentUser = state.users.find(u => u.id === state.currentUser.id);
-      } else {
-        state.currentUser = (state.users || []).find(u => u.role === 'admin') || (state.users || [])[0] || null;
-      }
-
-      if (state.currentUser) {
-        currentRole = state.currentUser.role || 'admin';
-        currentTab = currentRole === 'culture' ? 'production' : (currentRole === 'delivery' ? 'delivery' : 'dashboard');
+        currentRole = targetUser.role || 'culture';
         localStorage.setItem('mycotrack_session_active', 'true');
-        localStorage.setItem('mycotrack_saved_user_id', state.currentUser.id);
-        setRole(currentRole);
+        localStorage.setItem('mycotrack_saved_user_id', targetUser.id);
       } else {
-        renderAuthLandingPage();
-      }
-
-      saveState();
-      showToast(`Espace actif : ${state.farm.name}`);
-    }
-
-    // Migration et injection garantie des 3 profils démo fondamentaux (Moura, Samir, Yacine)
-    if (!state.users || state.users.length === 0) {
-      state.users = JSON.parse(JSON.stringify(initialSeedState.users));
-    } else {
-      initialSeedState.users.forEach(seedU => {
-        const existing = state.users.find(u => u.id === seedU.id);
-        if (!existing) {
-          state.users.push({ ...seedU });
+        const owner = (state.users || []).find(u => u.role === 'admin') || (state.users || [])[0];
+        if (owner) {
+          state.currentUser = owner;
+          currentRole = owner.role || 'culture';
+          localStorage.setItem('mycotrack_session_active', 'true');
+          localStorage.setItem('mycotrack_saved_user_id', owner.id);
         } else {
-          // Mettre à jour les champs manquants dans l'ancien stockage
-          if (!existing.phone) existing.phone = seedU.phone;
-          if (!existing.password && seedU.password) existing.password = seedU.password;
-          if (!existing.pin && seedU.pin) existing.pin = seedU.pin;
-          if (!existing.title) existing.title = seedU.title;
-          if (!existing.role) existing.role = seedU.role;
-          if (!existing.farmId) existing.farmId = state.farm.id;
+          state.currentUser = null;
         }
-      });
-    }
-
-    // Gestion de la session utilisateur
-    if (localStorage.getItem('mycotrack_session_active') !== 'true') {
-      state.currentUser = null;
-    } else {
-      const savedUserId = localStorage.getItem('mycotrack_saved_user_id');
-      if (savedUserId && state.users) {
-        const found = state.users.find(u => u.id === savedUserId);
-        if (found) state.currentUser = found;
       }
+      setupFirestoreListenerForActiveFarm(farmId);
+      saveState();
+      renderCurrentView();
     }
 
     function saveState() {
       saveCurrentFarmData();
-      localStorage.setItem('mycotrack_state_v8', JSON.stringify(state));
-      localStorage.setItem('mycotrack_state_v7', JSON.stringify(state));
+      localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+      syncCurrentFarmToFirestore();
       checkBadges();
       renderCurrentView();
     }
@@ -6723,14 +6506,7 @@
           }
         }
       }
-      if (!user) {
-        user = (initialSeedState.users || []).find(u => u.id === userId);
-        if (user) {
-          switchActiveFarm('farm_01', user);
-          closeModal();
-          return;
-        }
-      }
+      // No mock fallback
       if (!user) return;
       state.currentUser = user;
       currentRole = user.role || 'culture';
@@ -6809,13 +6585,13 @@
       if (!container) return;
 
       const farmHeader = document.getElementById('farm-name-header');
-      if (farmHeader) farmHeader.innerText = "Portail d'identification";
+      if (farmHeader) farmHeader.innerText = state.farm ? state.farm.name : "MycoTrack Pro";
 
       const headerAvatar = document.getElementById('header-user-avatar');
       if (headerAvatar) headerAvatar.innerText = "🔑";
 
       const headerUserName = document.getElementById('header-user-name');
-      if (headerUserName) headerUserName.innerText = "Connexion";
+      if (headerUserName) headerUserName.innerText = "Portail";
 
       const notifBtn = document.getElementById('header-notif-btn');
       if (notifBtn) notifBtn.classList.add('hidden');
@@ -6829,31 +6605,26 @@
       const bottomNav = document.getElementById('bottom-nav');
       if (bottomNav) bottomNav.classList.add('hidden');
 
-      const farm = state.farm || { name: 'Ferme Moura Pleurotes', inviteCode: 'MYCO-MOURA-2026' };
+      const registeredFarms = state.farms || [];
+      const hasFarms = registeredFarms.length > 0;
       
-      // Toujours inclure les 3 profils démo initiaux pour garantir un test instantané
-      const allUsers = [...(state.users || [])];
-      (initialSeedState.users || []).forEach(seedU => {
-        if (!allUsers.some(u => u.id === seedU.id)) {
-          allUsers.push({ ...seedU });
-        }
-      });
+      // Si aucune ferme n'existe encore sur cet appareil, basculer par défaut sur Création
+      if (!hasFarms && authTab === 'login') {
+        authTab = 'create';
+      }
 
       let formHtml = '';
 
       if (authTab === 'create') {
-        // Formulaire Déploiement SaaS d'une nouvelle exploitation
+        // Formulaire Déploiement d'une Nouvelle Ferme (Patron)
         formHtml = `
-          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3 shadow-lg">
-            <div class="flex items-center justify-between border-b border-[#2d4a2d] pb-2">
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
+            <div class="border-b border-[#2d4a2d] pb-2">
               <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>🏢</span> <span>Créer une Nouvelle Ferme (SaaS)</span>
+                <span>🏢</span> <span>Créer une Nouvelle Exploitation (Gérant)</span>
               </h3>
-              <button onclick="setAuthTab('login')" class="text-[11px] text-[#7bc67e] hover:underline font-semibold flex items-center gap-1">
-                <span>←</span> <span>Retour Connexion</span>
-              </button>
+              <p class="text-[11px] text-[#888] mt-0.5">Déployez votre espace cloud sécurisé. Vous serez l'administrateur principal.</p>
             </div>
-            <p class="text-[11px] text-[#888]">Vous serez le Propriétaire & Administrateur principal de cet espace.</p>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom de l'Exploitation / Ferme *</label>
@@ -6862,8 +6633,8 @@
 
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom du Gérant *</label>
-                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Karim" value="">
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom & Prénom Gérant *</label>
+                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Karim Belkacem" value="">
               </div>
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile Gérant</label>
@@ -6882,31 +6653,81 @@
             </div>
 
             <button onclick="submitCreateFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
-              <span>👑</span> <span>Créer ma Ferme & Devenir Gérant</span>
+              <span>👑</span> <span>Créer ma Ferme & Accéder à l'Espace</span>
+            </button>
+
+            ${hasFarms ? `
+              <button onclick="setAuthTab('login')" class="w-full py-2 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold">
+                Retour à la connexion
+              </button>
+            ` : ''}
+          </div>
+        `;
+      } else if (authTab === 'join') {
+        // Formulaire Inscription Employé avec Code d'Invitation
+        formHtml = `
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
+            <div class="border-b border-[#2d4a2d] pb-2">
+              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>🤝</span> <span>Rejoindre une Ferme Existante</span>
+              </h3>
+              <p class="text-[11px] text-[#888] mt-0.5">Saisissez le code d'invitation fourni par votre gérant.</p>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Code d'Invitation de la Ferme *</label>
+              <input id="portal-join-code" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white font-mono text-center font-bold tracking-widest uppercase text-sm focus:outline-none" placeholder="ex: MYCO-KARI-1234">
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Votre Nom & Prénom *</label>
+              <input id="portal-join-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Khaled Meziani">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile *</label>
+                <input id="portal-join-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0661223344">
+              </div>
+              <div>
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Code PIN (4 chiffres) *</label>
+                <input id="portal-join-pin" type="text" maxlength="4" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-[#7bc67e] font-mono text-center font-bold tracking-widest text-sm focus:outline-none" placeholder="1234" value="1234">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[#aaa] text-xs block mb-1 font-semibold">Rôle attribué par le gérant *</label>
+              <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none">
+                <option value="culture">🍄 Ouvrier Culture & Récolte (Option 1 : Zéro données financières)</option>
+                <option value="delivery">🛵 Livreur Express (Accès courses & livraisons)</option>
+              </select>
+            </div>
+
+            <button onclick="submitJoinFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
+              <span>🚀</span> <span>Rejoindre la Ferme & Commencer</span>
             </button>
 
             <button onclick="setAuthTab('login')" class="w-full py-2 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold">
-              Annuler et revenir à la connexion
+              Retour à la connexion
             </button>
           </div>
         `;
       } else {
-        // Page Unique de Connexion Simple (Proposition 2 : Patron d'abord)
+        // Page Unique de Connexion Simple
         formHtml = `
           <div class="space-y-4">
-            <!-- Formulaire de Connexion Mobile & Rapide -->
-            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3 shadow-lg">
+            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
                   <span>📱 Téléphone mobile OU 📧 Email</span>
                   <span class="text-[10px] text-[#7bc67e] font-normal">Algérie (+213)</span>
                 </label>
-                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550000001 ou 0661112233" value="">
+                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550123456 ou contact@ferme.dz" value="">
               </div>
 
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
-                  <span>🔒 Mot de passe (Admin) ou PIN 4 chiffres (Équipe)</span>
+                  <span>🔒 Mot de passe (Gérant) ou PIN 4 chiffres (Équipe)</span>
                   <span class="text-[10px] text-[#888]">Ouvrier & Livreur : 4 chiffres</span>
                 </label>
                 <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="">
@@ -6915,80 +6736,66 @@
               <div class="flex items-center justify-between text-[11px] pt-1 text-[#888]">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="checkbox" id="auth-remember-me" checked class="accent-[#4a9e4e] rounded">
-                  <span class="text-slate-300 font-medium">Rester connecté (toujours)</span>
+                  <span class="text-slate-300 font-medium">Rester connecté sur cet appareil</span>
                 </label>
-                <span class="text-[#7bc67e] hover:underline cursor-pointer" onclick="showToast('Admin: password123 | Ouvrier: PIN 1234 | Livreur: PIN 5678')">Aide codes</span>
               </div>
 
               <button onclick="loginWithFormCredentials()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
                 <span>🔑</span> <span>Se Connecter à la Ferme</span>
               </button>
-
-              <div class="p-2.5 bg-[#0a120a] rounded-xl border border-[#2d4a2d] text-[10px] text-[#888] leading-tight">
-                💡 <strong>Gestion simplifiée :</strong> Le gérant ajoute directement ses ouvriers et livreurs dans <strong>Carnet Pro ➔ Équipe</strong>. L'employé saisit simplement son numéro de téléphone et son PIN 4 chiffres pour accéder à son espace.
-              </div>
             </div>
 
-            <!-- Accès Rapide Démo 1-Clic aux 3 Profils Clés -->
-            <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border border-[#2d4a2d] space-y-2.5 shadow-lg">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>⚡</span> <span>Accès Démo Instantané (3 Profils Clés)</span>
-                </span>
-                <span class="text-[10px] text-[#7bc67e] font-semibold bg-[#1f3a1f] px-2 py-0.5 rounded-full border border-[#7bc67e]/30">1 Clic</span>
-              </div>
-              <p class="text-[11px] text-[#888]">Cliquez directement sur un profil pour tester son interface dédiée :</p>
-              
-              <div class="grid grid-cols-1 gap-2 pt-1">
-                ${allUsers.map(usr => `
-                  <button onclick="loginDirectUser('${usr.id}')" class="p-2.5 rounded-xl border border-[#2d4a2d] hover:border-[#7bc67e] bg-[#0f1a0f] hover:bg-[#1f3a1f] transition-all flex items-center justify-between text-left group">
-                    <div class="flex items-center gap-2.5">
-                      <span class="text-lg w-9 h-9 rounded-xl bg-[#142214] flex items-center justify-center border border-[#2d4a2d] group-hover:border-[#7bc67e]">
-                        ${usr.role === 'admin' ? '👑' : (usr.role === 'culture' ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}
-                      </span>
+            <!-- Liste des fermes enregistrées sur cet appareil si existantes -->
+            ${registeredFarms.length > 0 ? `
+              <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2 text-xs">
+                <span class="text-[11px] font-bold text-[#aaa] block">Exploitations disponibles sur cet appareil :</span>
+                <div class="space-y-1.5">
+                  ${registeredFarms.map(f => `
+                    <div class="flex items-center justify-between p-2 rounded-xl bg-[#0a120a] border border-[#2d4a2d]">
                       <div>
-                        <span class="text-xs font-bold text-white block">${usr.name}</span>
-                        <span class="text-[10px] text-[#888]">
-                          ${usr.phone ? `📱 ${usr.phone}` : usr.email} • 
-                          ${usr.role === 'admin' ? 'Mot de passe' : `PIN: ${usr.pin || (usr.role === 'culture' ? '1234' : '5678')}`}
-                        </span>
+                        <strong class="text-white block text-xs">${f.name}</strong>
+                        <span class="text-[10px] text-[#7bc67e] font-mono">Code: ${f.inviteCode}</span>
                       </div>
+                      <button onclick="switchActiveFarm('${f.id}')" class="px-2.5 py-1 bg-[#1f3a1f] text-[#7bc67e] hover:bg-[#2e542e] rounded-lg font-bold text-[10px]">
+                        Sélectionner
+                      </button>
                     </div>
-                    <div class="text-right">
-                      <span class="text-[10px] px-2.5 py-1 rounded-lg font-bold ${usr.role === 'admin' ? 'bg-[#4a9e4e]/20 text-[#7bc67e] border border-[#7bc67e]/40' : (usr.role === 'culture' ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' : (usr.role === 'delivery' ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-300'))}">
-                        ${usr.status === 'pending' ? 'Attente ⏳' : 'Tester ➔'}
-                      </span>
-                    </div>
-                  </button>
-                `).join('')}
+                  `).join('')}
+                </div>
               </div>
-            </div>
-
-            <!-- Déploiement SaaS Multi-Fermes (Lien discret) -->
-            <div class="text-center pt-1">
-              <button onclick="setAuthTab('create')" class="text-[11px] text-[#7bc67e] hover:underline font-semibold inline-flex items-center gap-1.5 transition-all">
-                <span>🏢</span> <span>Vous déployez une nouvelle ferme ? Créer un espace SaaS</span>
-              </button>
-            </div>
+            ` : ''}
           </div>
         `;
       }
 
       container.innerHTML = `
         <div class="max-w-md mx-auto space-y-4 pb-8 select-none">
-          <!-- En-tête de bienvenue & Logo -->
+          <!-- Logo & En-tête -->
           <div class="text-center pt-3 pb-1 space-y-1.5">
             <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#142214] border-2 border-[#7bc67e] shadow-lg shadow-[#4a9e4e]/20 text-3xl">
               🍄
             </div>
             <div>
               <h1 class="text-base font-extrabold text-white tracking-wide">MycoTrack Pro</h1>
-              <p class="text-[11px] text-[#7bc67e] font-semibold">${farm.name}</p>
-              <p class="text-[10px] text-[#888]">Portail d'identification sécurisé • Gestion & Traçabilité</p>
+              <p class="text-[11px] text-[#7bc67e] font-semibold">${state.farm ? state.farm.name : 'Gestion Mycologique SaaS'}</p>
+              <p class="text-[10px] text-[#888]">Portail d'identification sécurisé • Mode Cloud & Hors-ligne</p>
             </div>
           </div>
 
-          <!-- Corps du formulaire (Sans barre d'onglets encombrante) -->
+          <!-- Onglets de sélection rapides -->
+          <div class="flex bg-[#142214] p-1 rounded-2xl border border-[#2d4a2d] text-xs">
+            <button onclick="setAuthTab('login')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'login' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+              🔑 Connexion
+            </button>
+            <button onclick="setAuthTab('create')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'create' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+              🏢 Créer Ferme
+            </button>
+            <button onclick="setAuthTab('join')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'join' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+              🤝 Rejoindre
+            </button>
+          </div>
+
+          <!-- Corps du formulaire -->
           ${formHtml}
         </div>
       `;
@@ -7082,13 +6889,7 @@
           }
         }
       }
-      if (!user) {
-        const seedU = (initialSeedState.users || []).find(u => u.id === userId);
-        if (seedU) {
-          switchActiveFarm('farm_01', seedU);
-          return;
-        }
-      }
+      // No mock fallback
       if (!user) return;
       state.currentUser = user;
       currentRole = user.role || 'culture';
@@ -7156,14 +6957,7 @@
         }
       }
 
-      // 3. Fallback sur profils démo initiaux
-      if (!user) {
-        const fallback = (initialSeedState.users || []).find(matchUser);
-        if (fallback) {
-          user = { ...fallback };
-          targetFarmId = 'farm_01';
-        }
-      }
+      // No mock fallback
 
       if (!user) {
         return alert("Identifiant introuvable. Veuillez vérifier votre numéro de téléphone ou votre email.");
