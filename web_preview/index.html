@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
   <!-- Tailwind CSS -->
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Firebase Web SDK (Compat mode for cloud sync & offline persistence) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -352,6 +352,12 @@
     // ==========================================
     const FIRESTORE_PROJECT_ID = 'mycoapp-ferme-69081';
     const FIRESTORE_REST_BASE = 'https://firestore.googleapis.com/v1/projects/' + FIRESTORE_PROJECT_ID + '/databases/(default)/documents';
+    const FIREBASE_API_KEY = 'AIzaSyA5StGNbE15cDr7CmSOdcQZ0RHkOFFDhEI';
+
+    function toRestUrl(endpoint) {
+      const sep = endpoint.includes('?') ? '&' : '?';
+      return FIRESTORE_REST_BASE + endpoint + sep + 'key=' + FIREBASE_API_KEY;
+    }
 
     let firebaseApp = null;
     let firestoreDb = null;
@@ -444,7 +450,7 @@
       // 2. Toujours sécuriser / doubler avec l'API REST directe Google Firestore (timeout 3000ms)
       try {
         const payload = JSON.stringify({ fields: toFirestoreRestFields(data) });
-        const url = FIRESTORE_REST_BASE + '/' + collection + '/' + encodeURIComponent(docId);
+        const url = toRestUrl('/' + collection + '/' + encodeURIComponent(docId));
         const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
         const resp = await fetch(url, {
@@ -520,7 +526,7 @@ async function cloudGetDoc(collection, docId) {
 
       // 2. Interrogation directe via Firestore REST API (infaillible sous WebView file:// & Safari iOS)
       try {
-        const url = FIRESTORE_REST_BASE + '/' + collection + '/' + encodeURIComponent(docId);
+        const url = toRestUrl('/' + collection + '/' + encodeURIComponent(docId));
         const resp = await fetch(url);
         if (resp.ok) {
           const json = await resp.json();
@@ -580,6 +586,73 @@ async function cloudGetDoc(collection, docId) {
     }
 
     // Initialisation automatique du moteur Cloud
+    
+    async function cloudListFarms() {
+      try {
+        const resp = await fetch(toRestUrl('/farms'));
+        if (resp && resp.ok) {
+          const json = await resp.json();
+          const list = [];
+          for (const doc of (json.documents || [])) {
+            const id = doc.name.split('/').pop();
+            const fields = doc.fields || {};
+            let fName = id;
+            let fCode = '';
+            let ownerName = 'Gérant';
+            if (fields.farm && fields.farm.stringValue) {
+              try {
+                const parsed = JSON.parse(fields.farm.stringValue);
+                fName = parsed.name || fName;
+                fCode = parsed.inviteCode || fCode;
+                ownerName = parsed.ownerName || ownerName;
+              } catch (e) {}
+            }
+            if (fields.name && fields.name.stringValue) fName = fields.name.stringValue;
+            if (fields.inviteCode && fields.inviteCode.stringValue) fCode = fields.inviteCode.stringValue;
+            list.push({ id, name: fName, inviteCode: fCode, ownerName });
+          }
+          return list;
+        }
+      } catch (e) {
+        console.warn('cloudListFarms error:', e.message);
+      }
+      return [];
+    }
+
+    async function quickConnectToCloudFarm(farmId, inviteCode) {
+      showToast('Connexion à l\'exploitation ' + (inviteCode || farmId) + '...');
+      try {
+        const fPayload = await cloudGetDoc('farms', farmId);
+        if (fPayload) {
+          if (!state.farmsData) state.farmsData = {};
+          state.farmsData[farmId] = fPayload;
+          if (!state.farms) state.farms = [];
+          const farmObj = fPayload.farm || { id: farmId, name: fPayload.name || 'Ferme Pleurotes', inviteCode: inviteCode || fPayload.inviteCode };
+          if (!state.farms.some(f => f.id === farmId)) state.farms.push(farmObj);
+
+          saveCurrentFarmData();
+          loadFarmData(farmId);
+
+          const owner = (fPayload.users || []).find(u => u.role === 'admin') || (fPayload.users || [])[0];
+          if (owner) {
+            state.currentUser = owner;
+            currentRole = owner.role || 'admin';
+            localStorage.setItem('mycotrack_session_active', 'true');
+            localStorage.setItem('mycotrack_saved_user_id', owner.id);
+            saveState();
+            renderCurrentView();
+            showToast('Exploitation ' + (state.farm ? state.farm.name : '') + ' chargée avec succès !');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('quickConnect error:', e);
+      }
+      setAuthTab('login');
+      const input = document.getElementById('auth-login-identifier');
+      if (input) input.value = inviteCode || farmId;
+    }
+
     function initFirebaseCloud() {
       try {
         if (typeof firebase !== 'undefined') {
@@ -7902,7 +7975,7 @@ async function cloudGetDoc(collection, docId) {
 
           <!-- Corps du formulaire -->
           ${formHtml}
-        
+
           <!-- Section Téléchargement Mobile & Accès -->
           <div class="mt-6 pt-4 border-t border-[#2d4a2d]/80 space-y-3">
             <div class="text-center">
@@ -7941,6 +8014,32 @@ async function cloudGetDoc(collection, docId) {
           </div>
 </div>
       `;
+
+      // Chargement asynchrone des fermes Cloud après insertion DOM
+      setTimeout(() => {
+        cloudListFarms().then(farms => {
+          const listEl = document.getElementById('cloud-farms-list');
+          if (!listEl) return;
+          if (!farms || farms.length === 0) {
+            listEl.innerHTML = '<p class="text-[11px] text-[#888] text-center p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d]">Aucune exploitation sur le Cloud. Saisissez votre identifiant ci-dessous ou créez votre ferme.</p>';
+            return;
+          }
+          listEl.innerHTML = farms.map(f => `
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0a120a] border border-[#2d4a2d] hover:border-[#7bc67e] transition-all group">
+              <div class="text-left">
+                <strong class="text-white text-xs block group-hover:text-[#7bc67e] transition-colors">${f.name}</strong>
+                <span class="text-[10px] text-[#7bc67e] font-mono font-bold">Code : ${f.inviteCode || f.id}</span>
+              </div>
+              <button onclick="quickConnectToCloudFarm('${f.id}', '${f.inviteCode}')" class="px-3 py-1.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow shadow-[#4a9e4e]/20 flex items-center gap-1.5 transition-all">
+                <span>Ouvrir</span> <span>➔</span>
+              </button>
+            </div>
+          `).join('');
+        }).catch(err => {
+          const listEl = document.getElementById('cloud-farms-list');
+          if (listEl) listEl.innerHTML = '<p class="text-[10px] text-[#888] text-center p-2">Exploitations Cloud prêtes. Saisissez vos identifiants ci-dessous.</p>';
+        });
+      }, 50);
     }
 
     function renderPendingApprovalPage() {
@@ -8091,8 +8190,34 @@ async function cloudGetDoc(collection, docId) {
       let user = null;
       let targetFarmId = state.farm ? state.farm.id : null;
 
+      // 0. Si un code d'invitation est saisi directement (ex: MYCO-KEBI-8024)
+      const isPossibleCode = rawIdent.toUpperCase().startsWith('MYCO-') || (!isEmail && cleanDigits.length === 4 && rawIdent.length <= 15);
+      if (isPossibleCode) {
+        try {
+          const inviteMeta = await cloudGetInviteCode(rawIdent);
+          if (inviteMeta && inviteMeta.farmId) {
+            const fPayload = await cloudGetDoc('farms', inviteMeta.farmId);
+            if (fPayload) {
+              targetFarmId = inviteMeta.farmId;
+              if (!state.farmsData) state.farmsData = {};
+              state.farmsData[targetFarmId] = fPayload;
+              if (!state.farms) state.farms = [];
+              const farmObj = fPayload.farm || { id: targetFarmId, name: inviteMeta.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: inviteMeta.inviteCode || rawIdent };
+              if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
+
+              // Connexion immédiate en tant que gérant de cette ferme
+              user = (fPayload.users || []).find(u => u.role === 'admin') || (fPayload.users || [])[0];
+            }
+          }
+        } catch (codeErr) {
+          console.warn('Invite code login note:', codeErr);
+        }
+      }
+
       // 1. Recherche dans la mémoire locale de cet appareil
-      user = (state.users || []).find(matchUser);
+      if (!user) {
+        user = (state.users || []).find(matchUser);
+      }
 
       if (!user && state.farmsData) {
         for (const fId of Object.keys(state.farmsData)) {

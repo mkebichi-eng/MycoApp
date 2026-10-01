@@ -1,5 +1,5 @@
-// MycoTrack Pro - Service Worker (Offline-First for iOS & Android)
-const CACHE_NAME = 'mycotrack-cache-v1';
+// MycoTrack Pro - Service Worker (Safari iOS & Android Universal Compatibility)
+const CACHE_NAME = 'mycotrack-cache-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -14,7 +14,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[MycoTrack SW] Caching app shell assets');
-      return cache.addAll(STATIC_ASSETS);
+      return cache.addAll(STATIC_ASSETS).catch(e => console.warn('Cache addAll note:', e));
     }).then(() => self.skipWaiting())
   );
 });
@@ -25,7 +25,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[MycoTrack SW] Removing obsolete cache:', key);
+            console.log('[MycoTrack SW] Purging obsolete cache:', key);
             return caches.delete(key);
           }
         })
@@ -34,25 +34,23 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Network-First with Cache Fallback strategy
+// Network-First with Cache Fallback - STRICTLY for same-origin GET requests
 self.addEventListener('fetch', (event) => {
-  // Ignore non-http(s) schemes like tel:, mailto:, sms:
-  if (!event.request.url.startsWith('http')) {
+  // Only intercept same-origin requests (never cross-origin like Google APIs, CDNs, GitHub)
+  if (!event.request.url.startsWith(self.location.origin) || event.request.method !== 'GET') {
     return;
   }
 
-  // Let Firebase / Firestore APIs handle their own offline caching
-  if (event.request.url.includes('firestore.googleapis.com') ||
-      event.request.url.includes('identitytoolkit.googleapis.com') ||
-      event.request.url.includes('firebaseinstallations.googleapis.com')) {
+  // Never intercept APK downloads, Firestore REST or external redirects
+  if (event.request.url.includes('/MycoTrackPro.apk') ||
+      event.request.url.includes('firestore.googleapis.com')) {
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Cache successful responses for our origin
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
@@ -60,16 +58,15 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
-        // When completely offline in culture rooms or tunnels, serve from cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-        });
+      .catch(async () => {
+        // Safe fallback - NEVER return undefined to respondWith (crashes Safari WebKit)
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          const indexCached = await caches.match('./index.html');
+          if (indexCached) return indexCached;
+        }
+        return new Response('Network offline', { status: 503, statusText: 'Service Unavailable' });
       })
   );
 });
