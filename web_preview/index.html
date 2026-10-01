@@ -330,20 +330,21 @@
     let storedState = JSON.parse(localStorage.getItem('mycotrack_prod_v1') || 'null');
     let state = storedState || JSON.parse(JSON.stringify(initialSeedState));
 
-    if (!state.strains || state.strains.length === 0) state.strains = initialSeedState.strains;
-    if (!state.stocks || state.stocks.length === 0) state.stocks = initialSeedState.stocks;
-    if (!state.tables) state.tables = [];
-    if (!state.bags) state.bags = [];
-    if (!state.farms) state.farms = [];
-    if (!state.farmsData) state.farmsData = {};
-    if (!state.users) state.users = [];
-    if (!state.deliverers) state.deliverers = [];
-    if (!state.clients) state.clients = [];
-    if (!state.deliveries) state.deliveries = [];
-    if (!state.expenses) state.expenses = [];
-    if (!state.notifications) state.notifications = [];
-    if (!state.units) state.units = initialSeedState.units;
-    if (!state.expenseCategories) state.expenseCategories = initialSeedState.expenseCategories;
+    state.strains = ensureArray(state.strains).length ? ensureArray(state.strains) : initialSeedState.strains;
+    state.stocks = ensureArray(state.stocks);
+    state.tables = ensureArray(state.tables);
+    state.bags = ensureArray(state.bags);
+    state.batches = ensureArray(state.batches);
+    state.farms = ensureArray(state.farms);
+    if (!state.farmsData || typeof state.farmsData !== 'object' || Array.isArray(state.farmsData)) state.farmsData = {};
+    state.users = ensureArray(state.users);
+    state.deliverers = ensureArray(state.deliverers);
+    state.clients = ensureArray(state.clients);
+    state.deliveries = ensureArray(state.deliveries);
+    state.expenses = ensureArray(state.expenses);
+    state.notifications = ensureArray(state.notifications);
+    state.units = ensureArray(state.units).length ? ensureArray(state.units) : initialSeedState.units;
+    state.expenseCategories = ensureArray(state.expenseCategories).length ? ensureArray(state.expenseCategories) : initialSeedState.expenseCategories;
 
     // ==========================================
     // MOTEUR DOUBLE CLOUD : FIREBASE SDK + DIRECT REST API
@@ -391,6 +392,43 @@
     }
 
     // Désérialiseur de documents Firestore REST vers objets JavaScript
+    
+    function ensureArray(val) {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string') {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) return parsed;
+        } catch(e) {}
+      }
+      return [];
+    }
+
+    function unpackFirestoreDoc(data) {
+      if (!data || typeof data !== 'object') return data;
+      const res = Array.isArray(data) ? [] : {};
+      for (const [k, v] of Object.entries(data)) {
+        if (typeof v === 'string') {
+          const trimmed = v.trim();
+          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+              res[k] = unpackFirestoreDoc(JSON.parse(trimmed));
+            } catch (e) {
+              res[k] = v;
+            }
+          } else {
+            res[k] = v;
+          }
+        } else if (v && typeof v === 'object') {
+          res[k] = unpackFirestoreDoc(v);
+        } else {
+          res[k] = v;
+        }
+      }
+      return res;
+    }
+
     function fromFirestoreRestFields(fields) {
       const res = {};
       if (!fields || typeof fields !== 'object') return res;
@@ -517,7 +555,7 @@ async function cloudGetDoc(collection, docId) {
           ]);
           if (snap && snap.exists) {
             updateCloudStatusIndicator(true);
-            return snap.data();
+            return unpackFirestoreDoc(snap.data());
           }
         } catch (e) {
           console.info('Firestore SDK get note (fallback REST en cours) :', e.message);
@@ -532,7 +570,7 @@ async function cloudGetDoc(collection, docId) {
           const json = await resp.json();
           if (json && json.fields) {
             updateCloudStatusIndicator(true);
-            return fromFirestoreRestFields(json.fields);
+            return unpackFirestoreDoc(fromFirestoreRestFields(json.fields));
           }
         }
       } catch (e) {
@@ -622,31 +660,38 @@ async function cloudGetDoc(collection, docId) {
     async function quickConnectToCloudFarm(farmId, inviteCode) {
       showToast('Connexion à l\'exploitation ' + (inviteCode || farmId) + '...');
       try {
-        const fPayload = await cloudGetDoc('farms', farmId);
+        let fPayload = await cloudGetDoc('farms', farmId);
         if (fPayload) {
+          fPayload = unpackFirestoreDoc(fPayload);
           if (!state.farmsData) state.farmsData = {};
           state.farmsData[farmId] = fPayload;
           if (!state.farms) state.farms = [];
-          const farmObj = fPayload.farm || { id: farmId, name: fPayload.name || 'Ferme Pleurotes', inviteCode: inviteCode || fPayload.inviteCode };
+          const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: farmId, name: fPayload.name || 'Ferme Pleurotes', inviteCode: inviteCode || fPayload.inviteCode };
           if (!state.farms.some(f => f.id === farmId)) state.farms.push(farmObj);
 
-          saveCurrentFarmData();
           loadFarmData(farmId);
+          saveCurrentFarmData();
 
-          const owner = (fPayload.users || []).find(u => u.role === 'admin') || (fPayload.users || [])[0];
-          if (owner) {
-            state.currentUser = owner;
-            currentRole = owner.role || 'admin';
-            localStorage.setItem('mycotrack_session_active', 'true');
-            localStorage.setItem('mycotrack_saved_user_id', owner.id);
-            saveState();
-            renderCurrentView();
-            showToast('Exploitation ' + (state.farm ? state.farm.name : '') + ' chargée avec succès !');
-            return;
-          }
+          const usersList = ensureArray(state.users);
+          const owner = usersList.find(u => u.role === 'admin') || usersList[0] || {
+            id: 'usr_admin_' + Date.now(),
+            name: 'Administrateur',
+            role: 'admin',
+            title: 'Propriétaire & Gérant'
+          };
+
+          state.currentUser = owner;
+          currentRole = owner.role || 'admin';
+          localStorage.setItem('mycotrack_session_active', 'true');
+          localStorage.setItem('mycotrack_saved_user_id', owner.id);
+          saveState();
+          setRole(owner.role || 'admin');
+          renderCurrentView();
+          showToast('Exploitation ' + (state.farm ? state.farm.name : '') + ' chargée avec succès !');
+          return;
         }
       } catch (e) {
-        console.warn('quickConnect error:', e);
+        console.error('quickConnect error:', e);
       }
       setAuthTab('login');
       const input = document.getElementById('auth-login-identifier');
@@ -862,23 +907,26 @@ async function cloudGetDoc(collection, docId) {
 
     function loadFarmData(farmId) {
       if (!state.farmsData) state.farmsData = {};
-      const fData = state.farmsData[farmId] || state.farmsData['farm_01'];
-      if (!fData) return;
+      const rawData = state.farmsData[farmId] || state.farmsData['farm_01'];
+      if (!rawData) return;
 
-      state.farm = fData.farm;
-      state.users = fData.users || [];
-      state.notifications = fData.notifications || [];
-      state.deliverers = fData.deliverers || [];
-      state.clients = fData.clients || [];
-      state.deliveries = fData.deliveries || [];
-      state.strains = fData.strains || initialSeedState.strains;
-      state.stocks = fData.stocks || [];
-      state.tables = fData.tables || [];
-      state.batches = fData.batches || [];
-      state.bags = fData.bags || [];
-      state.units = fData.units || initialSeedState.units;
-      state.expenseCategories = fData.expenseCategories || initialSeedState.expenseCategories;
-      state.expenses = fData.expenses || [];
+      const fData = unpackFirestoreDoc(rawData);
+      state.farmsData[farmId] = fData;
+
+      state.farm = (typeof fData.farm === 'object' && fData.farm) ? fData.farm : (state.farm || { id: farmId, name: fData.name || 'Ferme Pleurotes' });
+      state.users = ensureArray(fData.users);
+      state.notifications = ensureArray(fData.notifications);
+      state.deliverers = ensureArray(fData.deliverers);
+      state.clients = ensureArray(fData.clients);
+      state.deliveries = ensureArray(fData.deliveries);
+      state.strains = ensureArray(fData.strains).length ? ensureArray(fData.strains) : (initialSeedState.strains || []);
+      state.stocks = ensureArray(fData.stocks);
+      state.tables = ensureArray(fData.tables);
+      state.batches = ensureArray(fData.batches);
+      state.bags = ensureArray(fData.bags);
+      state.units = ensureArray(fData.units).length ? ensureArray(fData.units) : (initialSeedState.units || []);
+      state.expenseCategories = ensureArray(fData.expenseCategories).length ? ensureArray(fData.expenseCategories) : (initialSeedState.expenseCategories || []);
+      state.expenses = ensureArray(fData.expenses);
     }
 
     function switchActiveFarm(farmId, targetUser = null) {
@@ -7786,36 +7834,14 @@ async function cloudGetDoc(collection, docId) {
       const registeredFarms = state.farms || [];
       const hasFarms = registeredFarms.length > 0;
       
-      // Si aucune ferme n'existe encore sur cet appareil, basculer par défaut sur Création
-      if (!hasFarms && authTab === 'login') {
-        authTab = 'create';
-      }
+      // Le portail démarre toujours sur l'onglet Connexion
 
       let formHtml = '';
 
       if (authTab === 'create') {
         // Formulaire Déploiement d'une Nouvelle Ferme (Patron)
         formHtml = `
-          
-            <!-- Détection automatique en direct des fermes sur Google Cloud -->
-            <div id="cloud-detected-farms-box" class="bg-[#142214] p-3.5 rounded-2xl border border-[#4a9e4e]/50 space-y-2.5 shadow-lg">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>☁️</span> <span>Exploitations Détectées sur Google Cloud :</span>
-                </span>
-                <span class="text-[10px] bg-[#1f3a1f] text-[#7bc67e] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#7bc67e] animate-ping"></span>
-                  En direct
-                </span>
-              </div>
-              <div id="cloud-farms-list" class="space-y-1.5">
-                <div class="text-[11px] text-[#888] p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d] text-center flex items-center justify-center gap-2">
-                  <span>⏳</span> <span>Recherche de vos exploitations sur Google Cloud...</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
+          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
             <div class="border-b border-[#2d4a2d] pb-2">
               <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
                 <span>🏢</span> <span>Créer une Nouvelle Exploitation (Gérant)</span>
@@ -7913,6 +7939,23 @@ async function cloudGetDoc(collection, docId) {
         // Page Unique de Connexion Simple
         formHtml = `
           <div class="space-y-4">
+            <!-- Détection automatique en direct des fermes sur Google Cloud -->
+            <div id="cloud-detected-farms-box" class="bg-[#142214] p-3.5 rounded-2xl border border-[#4a9e4e]/50 space-y-2.5 shadow-lg">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>☁️</span> <span>Exploitations Détectées sur Google Cloud :</span>
+                </span>
+                <span class="text-[10px] bg-[#1f3a1f] text-[#7bc67e] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#7bc67e] animate-ping"></span>
+                  En direct
+                </span>
+              </div>
+              <div id="cloud-farms-list" class="space-y-1.5">
+                <div class="text-[11px] text-[#888] p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d] text-center flex items-center justify-center gap-2">
+                  <span>⏳</span> <span>Recherche de vos exploitations sur Google Cloud...</span>
+                </div>
+              </div>
+            </div>
             <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
@@ -8179,7 +8222,7 @@ async function cloudGetDoc(collection, docId) {
       const rawIdent = (identInput?.value || '').trim();
       const rawSecret = (secretInput?.value || '').trim();
 
-      if (!rawIdent) return alert('Veuillez saisir votre email ou votre numéro de téléphone.');
+      if (!rawIdent) return alert('Veuillez saisir votre identifiant (Téléphone, Email ou Code Ferme).');
 
       const isEmail = rawIdent.includes('@');
       const lowerEmail = rawIdent.toLowerCase();
@@ -8215,17 +8258,18 @@ async function cloudGetDoc(collection, docId) {
         try {
           const inviteMeta = await cloudGetInviteCode(rawIdent);
           if (inviteMeta && inviteMeta.farmId) {
-            const fPayload = await cloudGetDoc('farms', inviteMeta.farmId);
+            let fPayload = await cloudGetDoc('farms', inviteMeta.farmId);
             if (fPayload) {
+              fPayload = unpackFirestoreDoc(fPayload);
               targetFarmId = inviteMeta.farmId;
               if (!state.farmsData) state.farmsData = {};
               state.farmsData[targetFarmId] = fPayload;
               if (!state.farms) state.farms = [];
-              const farmObj = fPayload.farm || { id: targetFarmId, name: inviteMeta.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: inviteMeta.inviteCode || rawIdent };
+              const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: inviteMeta.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: inviteMeta.inviteCode || rawIdent };
               if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
 
-              // Connexion immédiate en tant que gérant de cette ferme
-              user = (fPayload.users || []).find(u => u.role === 'admin') || (fPayload.users || [])[0];
+              const usersList = ensureArray(fPayload.users);
+              user = (rawSecret ? usersList.find(u => u.password === rawSecret || u.pin === rawSecret) : null) || usersList.find(u => u.role === 'admin') || usersList[0];
             }
           }
         } catch (codeErr) {
@@ -8235,12 +8279,12 @@ async function cloudGetDoc(collection, docId) {
 
       // 1. Recherche dans la mémoire locale de cet appareil
       if (!user) {
-        user = (state.users || []).find(matchUser);
+        user = ensureArray(state.users).find(matchUser);
       }
 
       if (!user && state.farmsData) {
         for (const fId of Object.keys(state.farmsData)) {
-          const u = (state.farmsData[fId].users || []).find(matchUser);
+          const u = ensureArray(state.farmsData[fId]?.users).find(matchUser);
           if (u) {
             user = u;
             targetFarmId = fId;
@@ -8256,17 +8300,19 @@ async function cloudGetDoc(collection, docId) {
           if (credLookupKey) {
             const cloudCred = await cloudGetDoc('user_credentials', credLookupKey);
             if (cloudCred && cloudCred.farmId) {
-              const fPayload = await cloudGetDoc('farms', cloudCred.farmId);
+              let fPayload = await cloudGetDoc('farms', cloudCred.farmId);
               if (fPayload) {
+                fPayload = unpackFirestoreDoc(fPayload);
                 targetFarmId = cloudCred.farmId;
                 if (!state.farmsData) state.farmsData = {};
                 state.farmsData[targetFarmId] = fPayload;
                 if (!state.farms) state.farms = [];
-                const farmObj = fPayload.farm || { id: targetFarmId, name: cloudCred.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: fPayload.inviteCode };
+                const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: cloudCred.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: fPayload.inviteCode };
                 if (!state.farms.some(f => f.id === targetFarmId)) {
                   state.farms.push(farmObj);
                 }
-                user = (fPayload.users || []).find(matchUser) || cloudCred;
+                const usersList = ensureArray(fPayload.users);
+                user = usersList.find(matchUser) || cloudCred;
               }
             }
           }
@@ -8275,16 +8321,38 @@ async function cloudGetDoc(collection, docId) {
         }
       }
 
+      // 3. Si introuvable : recherche par nom direct d'exploitation (ex: Z3atria ou Z3atriaTest)
+      if (!user && !isEmail && !isPossibleCode) {
+        try {
+          const allFarms = await cloudListFarms();
+          const matched = allFarms.find(f => f.name && f.name.toLowerCase() === rawIdent.toLowerCase());
+          if (matched) {
+            let fPayload = await cloudGetDoc('farms', matched.id);
+            if (fPayload) {
+              fPayload = unpackFirestoreDoc(fPayload);
+              targetFarmId = matched.id;
+              if (!state.farmsData) state.farmsData = {};
+              state.farmsData[targetFarmId] = fPayload;
+              if (!state.farms) state.farms = [];
+              const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: matched.name, inviteCode: matched.inviteCode };
+              if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
+              const usersList = ensureArray(fPayload.users);
+              user = (rawSecret ? usersList.find(u => u.password === rawSecret || u.pin === rawSecret) : null) || usersList.find(u => u.role === 'admin') || usersList[0];
+            }
+          }
+        } catch (nameErr) {}
+      }
+
       if (loginBtn) {
         loginBtn.disabled = false;
         loginBtn.innerHTML = origLoginBtnHtml;
       }
 
       if (!user) {
-        return alert("Identifiant introuvable.\nVeuillez vérifier votre email ou votre numéro de téléphone.");
+        return alert("Identifiant introuvable.\nVérifiez votre email, numéro de téléphone, code d'invitation (MYCO-...) ou nom d'exploitation.");
       }
 
-      // 3. Vérification du mot de passe ou code PIN
+      // 4. Vérification du mot de passe ou code PIN
       if (rawSecret) {
         let isSecretValid = false;
         if (user.role === 'admin') {
@@ -8324,6 +8392,7 @@ async function cloudGetDoc(collection, docId) {
 
       saveState();
       setRole(user.role || 'operator');
+      renderCurrentView();
       showToast(`Bienvenue ${user.name} (${user.title || (user.role === 'admin' ? 'Administrateur' : 'Opérateur')}) !`);
     }
 
