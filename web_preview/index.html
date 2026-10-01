@@ -765,6 +765,28 @@ async function cloudGetDoc(collection, docId) {
       syncAllLocalFarmsToCloud();
     });
 
+    
+    function saveCurrentFarmData() {
+      if (!state.farm || !state.farm.id) return;
+      if (!state.farmsData) state.farmsData = {};
+      state.farmsData[state.farm.id] = {
+        farm: state.farm,
+        users: state.users || [],
+        notifications: state.notifications || [],
+        deliverers: state.deliverers || [],
+        clients: state.clients || [],
+        deliveries: state.deliveries || [],
+        strains: state.strains || initialSeedState.strains,
+        stocks: state.stocks || [],
+        tables: state.tables || [],
+        batches: state.batches || [],
+        bags: state.bags || [],
+        units: state.units || initialSeedState.units,
+        expenseCategories: state.expenseCategories || initialSeedState.expenseCategories,
+        expenses: state.expenses || []
+      };
+    }
+
     function loadFarmData(farmId) {
       if (!state.farmsData) state.farmsData = {};
       const fData = state.farmsData[farmId] || state.farmsData['farm_01'];
@@ -7442,7 +7464,7 @@ async function cloudGetDoc(collection, docId) {
               <span>👤</span> <span>Compte, Ferme & Rôles</span>
             </h3>
             <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-[#4a9e4e] text-white' : ((u.role === 'operator' || u.role === 'culture') ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#e0b87a] text-black')}">
-              ${u.role === 'admin' ? '👑 Gérant' : ((u.role === 'operator' || u.role === 'culture') ? '🍄 Culture' : '🛵 Livreur')}
+              ${u.role === 'admin' ? '👑 Gérant' : ((u.role === 'operator' || u.role === 'culture') ? '🍄 Opérateur' : '🛵 Livreur')}
             </span>
           </div>
 
@@ -7483,11 +7505,11 @@ async function cloudGetDoc(collection, docId) {
               ${allDisplayUsers.map(usr => `
                 <button onclick="switchCurrentUser('${usr.id}')" class="p-2 rounded-xl border transition-all text-left flex justify-between items-center ${state.currentUser?.id === usr.id ? 'bg-[#1f3a1f] border-[#7bc67e] text-white font-bold shadow' : 'bg-[#0f1a0f] border-[#2d4a2d] text-[#bbb] hover:border-[#7bc67e]/50'}">
                   <div class="flex items-center gap-2">
-                    <span class="text-base">${usr.role === 'admin' ? '👑' : ((u.role === 'operator' || u.role === 'culture') ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}</span>
+                    <span class="text-base">${usr.role === 'admin' ? '👑' : ((usr.role === 'operator' || usr.role === 'culture') ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}</span>
                     <div>
                       <span class="text-xs font-semibold text-white block">${usr.name}</span>
                       <span class="text-[10px] text-[#888]">
-                        ${usr.role === 'admin' ? 'Gérant (Accès Total)' : ((u.role === 'operator' || u.role === 'culture') ? `Culture (PIN: ${usr.pin || '1234'})` : `Livreur (PIN: ${usr.pin || '5678'})`)}
+                        ${usr.role === 'admin' ? 'Gérant (Accès Total)' : ((usr.role === 'operator' || usr.role === 'culture') ? `Opérateur (PIN: ${usr.pin || '1234'})` : `Livreur (PIN: ${usr.pin || '5678'})`)}
                       </span>
                     </div>
                   </div>
@@ -8329,130 +8351,141 @@ async function cloudGetDoc(collection, docId) {
     }
 
     async function submitCreateFarmFromPortal() {
-      const farmName = (document.getElementById('portal-create-farm-name')?.value || '').trim();
-      const ownerName = (document.getElementById('portal-create-owner-name')?.value || '').trim();
-      const ownerPhone = (document.getElementById('portal-create-owner-phone')?.value || '').trim();
-      const ownerEmail = (document.getElementById('portal-create-owner-email')?.value || '').trim();
-      const ownerPassword = (document.getElementById('portal-create-owner-password')?.value || '').trim() || 'password123';
-
-      if (!farmName || !ownerName || !ownerEmail) {
-        return alert('Veuillez remplir le nom de la ferme, votre nom et votre email.');
-      }
-
       const createBtn = document.querySelector('button[onclick="submitCreateFarmFromPortal()"]');
       const origBtnHtml = createBtn ? createBtn.innerHTML : '';
-      if (createBtn) {
-        createBtn.disabled = true;
-        createBtn.innerHTML = '<span>⏳</span> <span>Création de votre ferme en cours...</span>';
-      }
 
-      const codeSuffix = Math.floor(1000 + Math.random() * 9000);
-      const cleanUpper = ('MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix).toUpperCase();
-      const cleanLower = cleanUpper.toLowerCase();
-      const cleanAlpha = cleanUpper.replace(/[^A-Za-z0-9]/g, '');
+      try {
+        const farmName = (document.getElementById('portal-create-farm-name')?.value || '').trim();
+        const ownerName = (document.getElementById('portal-create-owner-name')?.value || '').trim();
+        const ownerPhone = (document.getElementById('portal-create-owner-phone')?.value || '').trim();
+        const ownerEmailInput = (document.getElementById('portal-create-owner-email')?.value || '').trim();
+        const ownerEmail = ownerEmailInput || (ownerPhone ? `${ownerPhone}@myco.farm` : `${ownerName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'gerant'}@myco.farm`);
+        const ownerPassword = (document.getElementById('portal-create-owner-password')?.value || '').trim() || 'password123';
 
-      const farmId = 'farm_' + Date.now();
-      const ownerId = 'usr_' + Date.now();
-
-      const newFarm = {
-        id: farmId,
-        name: farmName,
-        inviteCode: cleanUpper,
-        ownerId: ownerId,
-        createdAt: new Date().toISOString().slice(0, 10)
-      };
-
-      const ownerUser = {
-        id: ownerId,
-        name: ownerName,
-        email: ownerEmail,
-        phone: ownerPhone || '',
-        role: 'admin',
-        password: ownerPassword,
-        pin: '1234',
-        farmId: farmId,
-        status: 'active',
-        title: 'Propriétaire & Gérant'
-      };
-
-      const starterStocks = [
-        { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
-        { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
-        { id: 'stk_' + farmId + '_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
-        { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
-      ];
-
-      saveCurrentFarmData();
-
-      if (!state.farms) state.farms = [];
-      state.farms.push(newFarm);
-
-      if (!state.farmsData) state.farmsData = {};
-      state.farmsData[farmId] = {
-        farm: newFarm,
-        users: [ ownerUser ],
-        notifications: [
-          { id: 'notif_' + Date.now(), title: '🎉 Bienvenue sur MycoTrack Pro', body: 'Votre exploitation SaaS ' + farmName + ' est créée et prête !', type: 'system', date: 'Aujourd\'hui', read: false }
-        ],
-        deliverers: [],
-        clients: [],
-        deliveries: [],
-        strains: [
-          'Pleurote Gris HK35',
-          'Pleurote Jaune (Cornucopiae)',
-          'Pleurote Blanc Sporesol',
-          'Pleurote Plein Air (Ostreatus)',
-          'Shiitaké (Lentinula edodes)'
-        ],
-        stocks: starterStocks,
-        tables: [],
-        batches: [],
-        bags: [],
-        units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
-        expenseCategories: initialSeedState.expenseCategories,
-        expenses: []
-      };
-
-      // 1. Basculer immédiatement sur la nouvelle ferme (AUCUN BLOCAGE)
-      switchActiveFarm(farmId, ownerUser);
-
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.innerHTML = origBtnHtml;
-      }
-
-      showToast(`Ferme "${farmName}" créée avec succès ! Code : ${cleanUpper}`);
-
-      // 2. Publication Cloud Firestore en arrière-plan (Optimistic UI)
-      const farmPayload = {
-        ...state.farmsData[farmId],
-        inviteCode: cleanUpper,
-        lastSyncedAt: new Date().toISOString()
-      };
-
-      const invitePayload = {
-        farmId: farmId,
-        farmName: farmName,
-        ownerName: ownerName,
-        inviteCode: cleanUpper,
-        createdAt: new Date().toISOString()
-      };
-
-      (async () => {
-        try {
-          await Promise.allSettled([
-            cloudSaveDoc('farms', farmId, farmPayload),
-            cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
-            cloudSaveDoc('invite_codes', cleanLower, invitePayload),
-            cloudSaveDoc('invite_codes', cleanAlpha, invitePayload),
-            saveUserCredentialsToCloud(ownerUser)
-          ]);
-          console.log('☁️ Ferme, alias et identifiants publiés sur Firestore :', cleanUpper);
-          showToast(`☁️ Ferme "${farmName}" synchronisée sur Google Cloud !`);
-        } catch (cloudErr) {
-          console.warn('Note publication Cloud Firestore:', cloudErr);
+        if (!farmName || !ownerName) {
+          return alert('Veuillez renseigner au moins le nom de la ferme et votre nom.');
         }
-      })();
+
+        if (createBtn) {
+          createBtn.disabled = true;
+          createBtn.innerHTML = '<span>⏳</span> <span>Création de votre ferme en cours...</span>';
+        }
+
+        const codeSuffix = Math.floor(1000 + Math.random() * 9000);
+        const cleanUpper = ('MYCO-' + ownerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() + '-' + codeSuffix).toUpperCase();
+        const cleanLower = cleanUpper.toLowerCase();
+        const cleanAlpha = cleanUpper.replace(/[^A-Za-z0-9]/g, '');
+
+        const farmId = 'farm_' + Date.now();
+        const ownerId = 'usr_' + Date.now();
+
+        const newFarm = {
+          id: farmId,
+          name: farmName,
+          inviteCode: cleanUpper,
+          ownerId: ownerId,
+          createdAt: new Date().toISOString().slice(0, 10)
+        };
+
+        const ownerUser = {
+          id: ownerId,
+          name: ownerName,
+          email: ownerEmail,
+          phone: ownerPhone || '',
+          role: 'admin',
+          password: ownerPassword,
+          pin: '1234',
+          farmId: farmId,
+          status: 'active',
+          title: 'Propriétaire & Gérant'
+        };
+
+        const starterStocks = [
+          { id: 'stk_' + farmId + '_straw', name: 'Bottes de paille (Substrat)', category: 'Matière première', quantity: 0, unit: 'bottes', threshold: 5, cost: 250 },
+          { id: 'stk_' + farmId + '_hk35', name: 'Mycélium Pleurote Gris HK35', category: 'Semence/Blanc', quantity: 0, unit: 'sacs', threshold: 2, cost: 1800, strain: 'Pleurote Gris HK35', bagWeightKg: 2.0 },
+          { id: 'stk_' + farmId + '_bags', name: 'Sacs de culture micro-perforés', category: 'Consommable', quantity: 0, unit: 'unités', threshold: 20, cost: 25 },
+          { id: 'stk_' + farmId + '_lime', name: 'Chaux éteinte pasteurisation', category: 'Sanitation', quantity: 0, unit: 'kg', threshold: 10, cost: 80 }
+        ];
+
+        saveCurrentFarmData();
+
+        if (!state.farms) state.farms = [];
+        state.farms.push(newFarm);
+
+        if (!state.farmsData) state.farmsData = {};
+        state.farmsData[farmId] = {
+          farm: newFarm,
+          users: [ ownerUser ],
+          notifications: [
+            { id: 'notif_' + Date.now(), title: '🎉 Bienvenue sur MycoTrack Pro', body: 'Votre exploitation SaaS ' + farmName + ' est créée et prête !', type: 'system', date: 'Aujourd\'hui', read: false }
+          ],
+          deliverers: [],
+          clients: [],
+          deliveries: [],
+          strains: [
+            'Pleurote Gris HK35',
+            'Pleurote Jaune (Cornucopiae)',
+            'Pleurote Blanc Sporesol',
+            'Pleurote Plein Air (Ostreatus)',
+            'Shiitaké (Lentinula edodes)'
+          ],
+          stocks: starterStocks,
+          tables: [],
+          batches: [],
+          bags: [],
+          units: ['kg', 'unités', 'L', 'bottes', 'sacs'],
+          expenseCategories: initialSeedState.expenseCategories,
+          expenses: []
+        };
+
+        // 1. Basculer immédiatement sur la nouvelle ferme (AUCUN BLOCAGE)
+        switchActiveFarm(farmId, ownerUser);
+
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.innerHTML = origBtnHtml;
+        }
+
+        showToast(`Ferme "${farmName}" créée avec succès ! Code : ${cleanUpper}`);
+
+        // 2. Publication Cloud Firestore en arrière-plan (Optimistic UI)
+        const farmPayload = {
+          ...state.farmsData[farmId],
+          inviteCode: cleanUpper,
+          lastSyncedAt: new Date().toISOString()
+        };
+
+        const invitePayload = {
+          farmId: farmId,
+          farmName: farmName,
+          ownerName: ownerName,
+          inviteCode: cleanUpper,
+          createdAt: new Date().toISOString()
+        };
+
+        (async () => {
+          try {
+            await Promise.allSettled([
+              cloudSaveDoc('farms', farmId, farmPayload),
+              cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
+              cloudSaveDoc('invite_codes', cleanLower, invitePayload),
+              cloudSaveDoc('invite_codes', cleanAlpha, invitePayload),
+              saveUserCredentialsToCloud(ownerUser)
+            ]);
+            console.log('☁️ Ferme, alias et identifiants publiés sur Firestore :', cleanUpper);
+            showToast(`☁️ Ferme "${farmName}" synchronisée sur Google Cloud !`);
+          } catch (cloudErr) {
+            console.warn('Note publication Cloud Firestore:', cloudErr);
+          }
+        })();
+      } catch (err) {
+        console.error('Erreur création ferme:', err);
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.innerHTML = origBtnHtml;
+        }
+        alert('Erreur lors de la création de la ferme : ' + err.message);
+      }
     }
 
         function approveUserRole(userId, newRole) {
