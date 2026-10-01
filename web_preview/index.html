@@ -7796,7 +7796,26 @@ async function cloudGetDoc(collection, docId) {
       if (authTab === 'create') {
         // Formulaire Déploiement d'une Nouvelle Ferme (Patron)
         formHtml = `
-          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
+          
+            <!-- Détection automatique en direct des fermes sur Google Cloud -->
+            <div id="cloud-detected-farms-box" class="bg-[#142214] p-3.5 rounded-2xl border border-[#4a9e4e]/50 space-y-2.5 shadow-lg">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>☁️</span> <span>Exploitations Détectées sur Google Cloud :</span>
+                </span>
+                <span class="text-[10px] bg-[#1f3a1f] text-[#7bc67e] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#7bc67e] animate-ping"></span>
+                  En direct
+                </span>
+              </div>
+              <div id="cloud-farms-list" class="space-y-1.5">
+                <div class="text-[11px] text-[#888] p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d] text-center flex items-center justify-center gap-2">
+                  <span>⏳</span> <span>Recherche de vos exploitations sur Google Cloud...</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
             <div class="border-b border-[#2d4a2d] pb-2">
               <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
                 <span>🏢</span> <span>Créer une Nouvelle Exploitation (Gérant)</span>
@@ -7897,10 +7916,10 @@ async function cloudGetDoc(collection, docId) {
             <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
-                  <span>📱 Téléphone mobile OU 📧 Email</span>
+                  <span>📱 Téléphone, 📧 Email OU 🏢 Code Ferme (MYCO-...)</span>
                   <span class="text-[10px] text-[#7bc67e] font-normal">Algérie (+213)</span>
                 </label>
-                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550123456 ou contact@ferme.dz" value="">
+                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: MYCO-KEBI-8024, 0550367492 ou email" value="">
               </div>
 
               <div>
