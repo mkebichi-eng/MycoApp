@@ -423,31 +423,38 @@
     }
 
     // Sauvegarde Cloud universelle (Firestore SDK + REST direct)
-    async function cloudSaveDoc(collection, docId, data) {
+        async function cloudSaveDoc(collection, docId, data) {
       if (!docId || !data) return false;
       let success = false;
 
-      // 1. Tenter via Firestore Web SDK si disponible
+      // 1. Tenter via Firestore Web SDK avec timeout de 2000ms max (évite tout blocage)
       if (firestoreDb) {
         try {
-          await firestoreDb.collection(collection).doc(docId).set(data, { merge: true });
+          await Promise.race([
+            firestoreDb.collection(collection).doc(docId).set(data, { merge: true }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SDK_TIMEOUT')), 2000))
+          ]);
           success = true;
           updateCloudStatusIndicator(true);
         } catch (e) {
-          console.warn('Firestore SDK write note:', e.message);
+          console.warn('Firestore SDK set note:', e.message);
         }
       }
 
-      // 2. Toujours sécuriser / doubler avec l'API REST directe Google Firestore
+      // 2. Toujours sécuriser / doubler avec l'API REST directe Google Firestore (timeout 3000ms)
       try {
         const payload = JSON.stringify({ fields: toFirestoreRestFields(data) });
         const url = FIRESTORE_REST_BASE + '/' + collection + '/' + encodeURIComponent(docId);
+        const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
         const resp = await fetch(url, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: payload
+          body: payload,
+          signal: controller ? controller.signal : undefined
         });
-        if (resp.ok) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (resp && resp.ok) {
           success = true;
           updateCloudStatusIndicator(true);
         }
@@ -458,8 +465,41 @@
       return success;
     }
 
-    // Lecture Cloud universelle (Firestore SDK + REST direct)
-    async function cloudGetDoc(collection, docId) {
+    // Indexation globale des identifiants utilisateurs sur Cloud Firestore (Connexion universelle multi-appareils)
+    async function saveUserCredentialsToCloud(user) {
+      if (!user) return;
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      const cleanPhone = (user.phone || '').replace(/\D/g, '');
+      const farmId = user.farmId || (state.farm ? state.farm.id : null);
+      if (!farmId) return;
+
+      const payload = {
+        email: cleanEmail,
+        phone: cleanPhone,
+        name: user.name || 'Membre',
+        userId: user.id,
+        farmId: farmId,
+        farmName: state.farm ? state.farm.name : 'Exploitation Mycologique',
+        role: user.role || 'operator',
+        password: user.password || 'password123',
+        pin: user.pin || '1234',
+        status: user.status || 'active',
+        updatedAt: new Date().toISOString()
+      };
+
+      try {
+        if (cleanEmail && cleanEmail.includes('@')) {
+          await cloudSaveDoc('user_credentials', cleanEmail, payload);
+        }
+        if (cleanPhone && cleanPhone.length >= 9) {
+          await cloudSaveDoc('user_credentials', cleanPhone, payload);
+        }
+      } catch (e) {
+        console.warn('Save user credentials note:', e.message);
+      }
+    }
+
+async function cloudGetDoc(collection, docId) {
       if (!docId) return null;
 
       // 1. Tenter via Firestore SDK avec timeout de 2.5s pour éviter tout blocage réseau
@@ -631,7 +671,13 @@
             cloudSaveDoc('invite_codes', cleanLower, invitePayload),
             cloudSaveDoc('invite_codes', cleanAlpha, invitePayload)
           ]);
-          console.log('☁️ Ferme et alias synchronisés sur Firebase Cloud :', f.name, cleanUpper);
+          // Indexer également les identifiants des membres de la ferme
+          if (farmPayload.users && Array.isArray(farmPayload.users)) {
+            for (const u of farmPayload.users) {
+              await saveUserCredentialsToCloud({ ...u, farmId: f.id });
+            }
+          }
+          console.log('☁️ Ferme, alias et identifiants synchronisés sur Firebase Cloud :', f.name, cleanUpper);
         } catch (e) {
           console.warn('Sync note pour ferme', f.id, e.message);
         }
@@ -981,11 +1027,11 @@
         }
         if (bottomNav) bottomNav.classList.add('hidden');
         renderDeliveryView();
-      } else if (role === 'culture') {
+      } else if ((role === 'operator' || role === 'culture')) {
         if (deliveryBtn) deliveryBtn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
         if (adminBtn) adminBtn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow";
         if (statusText) {
-          statusText.innerText = "Mode Technicien de Culture";
+          statusText.innerText = "Mode Opérateur";
           statusText.className = "text-[11px] text-emerald-400 font-semibold";
         }
         if (bottomNav) bottomNav.classList.remove('hidden');
@@ -1029,7 +1075,7 @@
       }
       // Sécurité stricte des rôles : l'ouvrier ne peut pas naviguer vers Accueil ou Carnet
       // Sécurité stricte des rôles : le technicien ne peut pas naviguer vers Carnet (clients/livreurs)
-      if (currentRole === 'culture' && (tab === 'carnet' || tab === 'clients' || tab === 'deliverers')) {
+      if ((currentRole === 'operator' || currentRole === 'culture') && (tab === 'carnet' || tab === 'clients' || tab === 'deliverers')) {
         tab = 'dashboard';
       }
       if (tab === 'clients') {
@@ -1530,11 +1576,11 @@
 
     
     // ==========================================
-    // TABLEAU DE BORD DÉDIÉ AU TECHNICIEN DE CULTURE
+    // TABLEAU DE BORD DÉDIÉ À L'OPÉRATEUR
     // Suivi opérationnel : Sacs actifs, fructification, récoltes du jour
     // ZÉRO DONNÉE FINANCIÈRE OU SENSIBLE (Logique et valorisant)
     // ==========================================
-    function renderCultureTechnicianDashboardView() {
+    function renderOperatorDashboardView() {
       const container = document.getElementById('app-content');
       const allTables = state.tables || [];
       const bags = state.bags || [];
@@ -1554,7 +1600,7 @@
 
       container.innerHTML = `
         <div class="space-y-3 pb-6">
-          <!-- En-tête Accueil Technicien -->
+          <!-- En-tête Accueil Opérateur -->
           <div class="bg-gradient-to-r from-[#142214] via-[#1a2d1a] to-[#0f1a0f] p-3.5 rounded-2xl border border-[#2d4a2d] shadow-lg flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-[#2d4a2d] border border-[#7bc67e]/40 flex items-center justify-center text-xl shadow-inner">
@@ -1562,8 +1608,8 @@
               </div>
               <div>
                 <div class="flex items-center gap-2">
-                  <h2 class="text-sm font-bold text-white tracking-wide">${state.currentUser ? state.currentUser.name : 'Technicien Culture'}</h2>
-                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 font-semibold uppercase tracking-wider">Technicien Culture</span>
+                  <h2 class="text-sm font-bold text-white tracking-wide">${state.currentUser ? state.currentUser.name : 'Opérateur'}</h2>
+                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/30 font-semibold uppercase tracking-wider">Opérateur</span>
                 </div>
                 <p class="text-[10px] text-slate-400 mt-0.5">Exploitation : <span class="text-slate-200 font-medium">${state.farm ? state.farm.name : 'Ferme Mycologique'}</span></p>
               </div>
@@ -1630,7 +1676,7 @@
             </div>
           </div>
 
-          <!-- Actions Rapides Technicien -->
+          <!-- Actions Rapides Opérateur -->
           <div class="bg-[#0f1a0f] p-3 rounded-xl border border-[#2d4a2d]">
             <h3 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <span>⚡</span> <span>Actions Rapides de Culture</span>
@@ -1712,8 +1758,8 @@
     }
 
     function renderDashboardView() {
-      if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
-        renderCultureTechnicianDashboardView();
+      if ((currentRole === 'operator' || currentRole === 'culture') || (state.currentUser && (state.currentUser.role === 'operator' || state.currentUser.role === 'culture'))) {
+        renderOperatorDashboardView();
         return;
       }
       const container = document.getElementById('app-content');
@@ -2028,14 +2074,14 @@
         <div class="flex justify-between items-center mb-1">
           <div>
             <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase flex items-center gap-1.5">
-              <span>${currentRole === 'culture' ? '🛵' : '🛒'}</span>
-              <span>${currentRole === 'culture' ? 'EXPÉDITIONS & DÉPARTS LIVREURS' : 'Commandes & Ventes'}</span>
+              <span>${(currentRole === 'operator' || currentRole === 'culture') ? '🛵' : '🛒'}</span>
+              <span>${(currentRole === 'operator' || currentRole === 'culture') ? 'EXPÉDITIONS & DÉPARTS LIVREURS' : 'Commandes & Ventes'}</span>
             </h2>
             <p class="text-[10px] text-[#888]">
-              ${currentRole === 'culture' ? 'Expédier les récoltes fraîches et avertir le livreur' : 'Suivi des livraisons, des encaissements et historique'}
+              ${(currentRole === 'operator' || currentRole === 'culture') ? 'Expédier les récoltes fraîches et avertir le livreur' : 'Suivi des livraisons, des encaissements et historique'}
             </p>
           </div>
-          ${currentRole === 'culture' ? `
+          ${(currentRole === 'operator' || currentRole === 'culture') ? `
             <button onclick="openWorkerDispatchModal()" class="text-xs bg-[#4a9e4e] hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-bold shadow transition-all flex items-center gap-1">
               <span>🛵</span> <span>Expédier Récolte</span>
             </button>
@@ -2114,8 +2160,8 @@
               ${salesFilterMode !== 'recent5' || salesSearchQuery ? `
                 <button onclick="clearSalesDateFilter(); onSalesSearchInput('');" class="mt-3 px-3 py-1.5 bg-[#2d4a2d] text-white rounded-lg text-xs font-semibold">Réinitialiser le filtre</button>
               ` : `
-                <button onclick="${currentRole === 'culture' ? 'openWorkerDispatchModal()' : 'openNewSaleModal()'}" class="mt-3 px-3 py-1.5 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">
-                  ${currentRole === 'culture' ? '🛵 Expédier une Récolte' : '+ Créer une Vente'}
+                <button onclick="${(currentRole === 'operator' || currentRole === 'culture') ? 'openWorkerDispatchModal()' : 'openNewSaleModal()'}" class="mt-3 px-3 py-1.5 bg-[#4a9e4e] text-white rounded-lg text-xs font-bold">
+                  ${(currentRole === 'operator' || currentRole === 'culture') ? '🛵 Expédier une Récolte' : '+ Créer une Vente'}
                 </button>
               `}
             </div>
@@ -2127,8 +2173,8 @@
             const isInDelivery = d.status === 'in_delivery';
             const isDelivered = d.status === 'delivered_pending_settlement';
 
-            // Carte Dédiée Technicien de Culture : ZÉRO CHIFFRES D'AFFAIRES OU PRIX
-            if (currentRole === 'culture') {
+            // Carte Dédiée Opérateur : ZÉRO CHIFFRES D'AFFAIRES OU PRIX
+            if ((currentRole === 'operator' || currentRole === 'culture')) {
               return `
                 <div class="bg-[#1a2a1a] p-3.5 rounded-2xl border ${isSettled ? 'border-[#2d4a2d]' : 'border-[#4a9e4e] bg-[#162416]'} space-y-2">
                   <div class="flex justify-between items-start">
@@ -2307,7 +2353,7 @@
     }
 
     function openNewSaleModal(preselectedClientId = null) {
-      if (currentRole === 'culture') {
+      if ((currentRole === 'operator' || currentRole === 'culture')) {
         openWorkerDispatchModal();
         return;
       }
@@ -2589,7 +2635,7 @@
         status: 'pending_acceptance',
         createdAt: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
         notes: notes,
-        dispatchedBy: state.currentUser ? state.currentUser.name : 'Technicien Culture'
+        dispatchedBy: state.currentUser ? state.currentUser.name : 'Opérateur'
       };
 
       if (!state.deliveries) state.deliveries = [];
@@ -2919,7 +2965,7 @@
     }
 
     function renderCarnetView() {
-      if (currentRole === 'culture' || (state.currentUser && state.currentUser.role === 'culture')) {
+      if ((currentRole === 'operator' || currentRole === 'culture') || (state.currentUser && (state.currentUser.role === 'operator' || state.currentUser.role === 'culture'))) {
         switchTab('production');
         return;
       }
@@ -3154,7 +3200,7 @@
                   <div class="flex justify-between items-start">
                     <div class="flex items-center gap-2">
                       <div class="w-8 h-8 rounded-full bg-[#0f1a0f] border border-[#2d4a2d] flex items-center justify-center text-sm">
-                        ${u.role === 'admin' ? '👑' : (u.role === 'culture' ? '🍄' : '🛵')}
+                        ${u.role === 'admin' ? '👑' : ((u.role === 'operator' || u.role === 'culture') ? '🍄' : '🛵')}
                       </div>
                       <div>
                         <h4 class="font-bold text-white text-xs flex items-center gap-1.5">
@@ -3164,8 +3210,8 @@
                         <span class="text-[10px] text-[#aaa]">📱 ${u.phone || 'Non renseigné'} ${u.role !== 'admin' ? `• 🔑 PIN : <strong class="text-[#7bc67e] font-mono">${u.pin || '1234'}</strong>` : ''}</span>
                       </div>
                     </div>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-[#4a9e4e] text-white' : (u.role === 'culture' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#e0b87a] text-black')}">
-                      ${u.role === 'admin' ? '👑 Administrateur' : (u.role === 'culture' ? '🍄 Culture & Expédition' : '🛵 Livreur')}
+                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-[#4a9e4e] text-white' : ((u.role === 'operator' || u.role === 'culture') ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#e0b87a] text-black')}">
+                      ${u.role === 'admin' ? '👑 Administrateur' : ((u.role === 'operator' || u.role === 'culture') ? '🍄 Culture & Expédition' : '🛵 Livreur')}
                     </span>
                   </div>
 
@@ -3174,7 +3220,7 @@
                     <span class="text-[10px] text-[#888]">Rôle attribué :</span>
                     <select onchange="approveUserRole('${u.id}', this.value)" class="bg-[#0f1a0f] border border-[#2d4a2d] rounded-lg px-2 py-1 text-white text-xs font-semibold">
                       <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Administrateur (Gérant)</option>
-                      <option value="culture" ${u.role === 'culture' ? 'selected' : ''}>🍄 Technicien de Culture</option>
+                      <option value="culture" ${(u.role === 'operator' || u.role === 'culture') ? 'selected' : ''}>🍄 Opérateur</option>
                       <option value="delivery" ${u.role === 'delivery' ? 'selected' : ''}>🛵 Livreur Express</option>
                     </select>
                   </div>
@@ -3360,9 +3406,9 @@
             <div>
               <label class="text-[#888] block mb-1">Rôle dans la ferme *</label>
               <select id="team-new-role" class="w-full bg-[#0f1a0f] border border-[#2d4a2d] rounded-xl p-2.5 text-white font-semibold">
-                <option value="culture">🍄 Technicien de Culture</option>
+                <option value="operator">🍄 Opérateur de Culture (Zéro finances)</option>
                 <option value="delivery">🛵 Livreur Express</option>
-                <option value="admin">👑 Co-Gérant (Admin)</option>
+                <option value="admin">👑 Co-Gérant / Administrateur (Accès total)</option>
               </select>
             </div>
           </div>
@@ -3409,7 +3455,7 @@
         password: role === 'admin' ? 'password123' : undefined,
         farmId: state.farm ? state.farm.id : 'farm_01',
         status: 'active',
-        title: role === 'culture' ? 'Technicien de Culture' : (role === 'delivery' ? 'Livreur Express' : 'Co-Gérant')
+        title: (role === 'operator' || role === 'culture') ? 'Opérateur' : (role === 'delivery' ? 'Livreur Express' : 'Co-Gérant')
       };
 
       if (!state.users) state.users = [];
@@ -3602,7 +3648,7 @@
       const lowCount = state.stocks.filter(s => s.quantity <= s.threshold).length;
       const totalExpenses = state.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-      if (currentRole === 'culture') {
+      if ((currentRole === 'operator' || currentRole === 'culture')) {
         stockSubTab = 'stocks';
       }
 
@@ -3611,14 +3657,14 @@
         <div class="flex justify-between items-center mb-1.5">
           <div>
             <h2 class="text-xs font-bold text-[#7bc67e] tracking-wider uppercase flex items-center gap-1.5">
-              <span>📦</span> <span>${currentRole === 'culture' ? 'STOCKS & CONSOMMABLES' : 'STOCKS & ACHATS'}</span>
+              <span>📦</span> <span>${(currentRole === 'operator' || currentRole === 'culture') ? 'STOCKS & CONSOMMABLES' : 'STOCKS & ACHATS'}</span>
             </h2>
             <p class="text-[10px] text-[#888]">
-              ${currentRole === 'culture' ? `${totalStockItems} articles suivis (Paille, Blancs, Sacs, Seaux, Hygiène)` : `${totalStockItems} articles suivis • ${totalExpenses.toLocaleString()} DA engagés`}
+              ${(currentRole === 'operator' || currentRole === 'culture') ? `${totalStockItems} articles suivis (Paille, Blancs, Sacs, Seaux, Hygiène)` : `${totalStockItems} articles suivis • ${totalExpenses.toLocaleString()} DA engagés`}
             </p>
           </div>
           <div class="flex items-center gap-1.5">
-            ${currentRole === 'culture' ? `
+            ${(currentRole === 'operator' || currentRole === 'culture') ? `
               <button onclick="openNewStockModal()" class="text-[10px] bg-[#223822] hover:bg-[#2e4d2e] text-[#7bc67e] border border-[#7bc67e]/40 px-2.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1">
                 <span>+</span> <span>Nouvel Article</span>
               </button>
@@ -3656,7 +3702,7 @@
           </div>
         ` : ''}
 
-        ${(stockSubTab === 'stocks' || currentRole === 'culture') ? renderStocksSubViewHtml(lowCount) : renderExpensesSubViewHtml(totalExpenses)}
+        ${(stockSubTab === 'stocks' || (currentRole === 'operator' || currentRole === 'culture')) ? renderStocksSubViewHtml(lowCount) : renderExpensesSubViewHtml(totalExpenses)}
       `;
     }
 
@@ -5034,7 +5080,7 @@
       const isSplit = !!table.isSplitStrains;
 
       // Cas 1 : Ouvrier (Culture & Expédition)
-      if (currentRole === 'culture') {
+      if ((currentRole === 'operator' || currentRole === 'culture')) {
         if (tableKg > 0) {
           showModal(`
             <div class="space-y-3 text-xs">
@@ -7395,8 +7441,8 @@
             <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
               <span>👤</span> <span>Compte, Ferme & Rôles</span>
             </h3>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-[#4a9e4e] text-white' : (u.role === 'culture' ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#e0b87a] text-black')}">
-              ${u.role === 'admin' ? '👑 Gérant' : (u.role === 'culture' ? '🍄 Culture' : '🛵 Livreur')}
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-[#4a9e4e] text-white' : ((u.role === 'operator' || u.role === 'culture') ? 'bg-[#1f3a1f] text-[#7bc67e] border border-[#7bc67e]/40' : 'bg-[#e0b87a] text-black')}">
+              ${u.role === 'admin' ? '👑 Gérant' : ((u.role === 'operator' || u.role === 'culture') ? '🍄 Culture' : '🛵 Livreur')}
             </span>
           </div>
 
@@ -7404,7 +7450,7 @@
           <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-1.5">
             <div class="flex items-center gap-2.5">
               <div class="w-10 h-10 rounded-2xl bg-[#1f3a1f] border border-[#7bc67e] flex items-center justify-center text-xl">
-                ${u.role === 'admin' ? '👑' : (u.role === 'culture' ? '🍄' : '🛵')}
+                ${u.role === 'admin' ? '👑' : ((u.role === 'operator' || u.role === 'culture') ? '🍄' : '🛵')}
               </div>
               <div>
                 <h4 class="text-sm font-bold text-white">${u.name}</h4>
@@ -7437,11 +7483,11 @@
               ${allDisplayUsers.map(usr => `
                 <button onclick="switchCurrentUser('${usr.id}')" class="p-2 rounded-xl border transition-all text-left flex justify-between items-center ${state.currentUser?.id === usr.id ? 'bg-[#1f3a1f] border-[#7bc67e] text-white font-bold shadow' : 'bg-[#0f1a0f] border-[#2d4a2d] text-[#bbb] hover:border-[#7bc67e]/50'}">
                   <div class="flex items-center gap-2">
-                    <span class="text-base">${usr.role === 'admin' ? '👑' : (usr.role === 'culture' ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}</span>
+                    <span class="text-base">${usr.role === 'admin' ? '👑' : ((u.role === 'operator' || u.role === 'culture') ? '🍄' : (usr.role === 'delivery' ? '🛵' : '⏳'))}</span>
                     <div>
                       <span class="text-xs font-semibold text-white block">${usr.name}</span>
                       <span class="text-[10px] text-[#888]">
-                        ${usr.role === 'admin' ? 'Gérant (Accès Total)' : (usr.role === 'culture' ? `Culture (PIN: ${usr.pin || '1234'})` : `Livreur (PIN: ${usr.pin || '5678'})`)}
+                        ${usr.role === 'admin' ? 'Gérant (Accès Total)' : ((u.role === 'operator' || u.role === 'culture') ? `Culture (PIN: ${usr.pin || '1234'})` : `Livreur (PIN: ${usr.pin || '5678'})`)}
                       </span>
                     </div>
                   </div>
@@ -7524,7 +7570,7 @@
       if (!user) return;
       state.currentUser = user;
       currentRole = user.role || 'culture';
-      if (user.role === 'culture') {
+      if ((u.role === 'operator' || u.role === 'culture')) {
         currentTab = 'dashboard';
       } else if (user.role === 'delivery') {
         currentTab = 'delivery';
@@ -7593,7 +7639,7 @@
       if (farmHeader) farmHeader.innerText = f.name;
 
       const headerAvatar = document.getElementById('header-user-avatar');
-      if (headerAvatar) headerAvatar.innerText = u.role === 'admin' ? '👑' : (u.role === 'culture' ? '🍄' : (u.role === 'delivery' ? '🛵' : '⏳'));
+      if (headerAvatar) headerAvatar.innerText = u.role === 'admin' ? '👑' : ((u.role === 'operator' || u.role === 'culture') ? '🍄' : (u.role === 'delivery' ? '🛵' : '⏳'));
 
       const headerUserName = document.getElementById('header-user-name');
       if (headerUserName) headerUserName.innerText = (u.name || 'Utilisateur').split(' ')[0];
@@ -7735,7 +7781,7 @@
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Rôle attribué par le gérant *</label>
               <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none">
-                <option value="culture">🍄 Technicien de Culture (Gestion des sacs, récoltes & expéditions - Zéro finances)</option>
+                <option value="culture">🍄 Opérateur (Gestion des sacs, récoltes & expéditions - Zéro finances)</option>
                 <option value="delivery">🛵 Livreur Express (Accès courses & livraisons)</option>
               </select>
             </div>
@@ -7765,7 +7811,7 @@
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
                   <span>🔒 Mot de passe (Gérant) ou PIN 4 chiffres (Équipe)</span>
-                  <span class="text-[10px] text-[#888]">Technicien & Livreur : 4 chiffres</span>
+                  <span class="text-[10px] text-[#888]">Opérateur & Livreur : 4 chiffres</span>
                 </label>
                 <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="">
               </div>
@@ -7967,7 +8013,7 @@
       if (!user) return;
       state.currentUser = user;
       currentRole = user.role || 'culture';
-      if (user.role === 'culture') {
+      if ((u.role === 'operator' || u.role === 'culture')) {
         currentTab = 'dashboard';
       } else if (user.role === 'delivery') {
         currentTab = 'delivery';
@@ -7985,7 +8031,7 @@
       }
     }
 
-    function loginWithFormCredentials() {
+    async function loginWithFormCredentials() {
       const identInput = document.getElementById('auth-login-identifier') || document.getElementById('auth-login-email');
       const secretInput = document.getElementById('auth-login-secret') || document.getElementById('auth-login-password');
       const rememberCheckbox = document.getElementById('auth-remember-me');
@@ -7993,11 +8039,18 @@
       const rawIdent = (identInput?.value || '').trim();
       const rawSecret = (secretInput?.value || '').trim();
 
-      if (!rawIdent) return alert('Veuillez saisir votre numéro de téléphone ou votre email.');
+      if (!rawIdent) return alert('Veuillez saisir votre email ou votre numéro de téléphone.');
 
-      const cleanDigits = rawIdent.replace(/\D/g, '');
       const isEmail = rawIdent.includes('@');
       const lowerEmail = rawIdent.toLowerCase();
+      const cleanDigits = rawIdent.replace(/\D/g, '');
+
+      const loginBtn = document.querySelector('button[onclick="loginWithFormCredentials()"]');
+      const origLoginBtnHtml = loginBtn ? loginBtn.innerHTML : '';
+      if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '<span>⏳</span> <span>Vérification des accès...</span>';
+      }
 
       function matchUser(u) {
         if (!u) return false;
@@ -8014,12 +8067,11 @@
       }
 
       let user = null;
-      let targetFarmId = state.farm ? state.farm.id : 'farm_01';
+      let targetFarmId = state.farm ? state.farm.id : null;
 
-      // 1. Chercher dans la ferme active
+      // 1. Recherche dans la mémoire locale de cet appareil
       user = (state.users || []).find(matchUser);
 
-      // 2. Si non trouvé, chercher dans toutes les fermes enregistrées
       if (!user && state.farmsData) {
         for (const fId of Object.keys(state.farmsData)) {
           const u = (state.farmsData[fId].users || []).find(matchUser);
@@ -8031,28 +8083,69 @@
         }
       }
 
-      // No mock fallback
+      // 2. Si introuvable en local : Recherche sur Google Cloud Firestore (Connexion universelle multi-appareils)
+      if (!user) {
+        try {
+          const credLookupKey = isEmail ? lowerEmail : cleanDigits;
+          if (credLookupKey) {
+            const cloudCred = await cloudGetDoc('user_credentials', credLookupKey);
+            if (cloudCred && cloudCred.farmId) {
+              const fPayload = await cloudGetDoc('farms', cloudCred.farmId);
+              if (fPayload) {
+                targetFarmId = cloudCred.farmId;
+                if (!state.farmsData) state.farmsData = {};
+                state.farmsData[targetFarmId] = fPayload;
+                if (!state.farms) state.farms = [];
+                const farmObj = fPayload.farm || { id: targetFarmId, name: cloudCred.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: fPayload.inviteCode };
+                if (!state.farms.some(f => f.id === targetFarmId)) {
+                  state.farms.push(farmObj);
+                }
+                user = (fPayload.users || []).find(matchUser) || cloudCred;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Cloud login lookup note:', e.message);
+        }
+      }
+
+      if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = origLoginBtnHtml;
+      }
 
       if (!user) {
-        return alert("Identifiant introuvable. Veuillez vérifier votre numéro de téléphone ou votre email.");
+        return alert("Identifiant introuvable.\nVeuillez vérifier votre email ou votre numéro de téléphone.");
       }
 
-      // Si l'utilisateur appartient à une autre ferme, basculer sur cette ferme
-      if (state.farm && targetFarmId !== state.farm.id) {
-        switchActiveFarm(targetFarmId, user);
-      }
-
-      // Vérification du mot de passe ou code PIN si renseigné
+      // 3. Vérification du mot de passe ou code PIN
       if (rawSecret) {
         let isSecretValid = false;
         if (user.role === 'admin') {
-          isSecretValid = (rawSecret === user.password || rawSecret === 'password123');
+          isSecretValid = (rawSecret === user.password || rawSecret === user.pin || rawSecret === 'password123');
         } else {
           isSecretValid = (rawSecret === user.pin || rawSecret === user.password || rawSecret === '1234' || rawSecret === '5678');
         }
-        if (!isSecretValid && user.pin && rawSecret !== user.pin) {
-          return alert(`Code PIN incorrect pour ${user.name}.\nVeuillez saisir votre code PIN à 4 chiffres (ex: ${user.pin}).`);
+        if (!isSecretValid) {
+          if (user.role === 'admin') {
+            return alert(`Mot de passe incorrect pour le compte administrateur ${user.email || user.name}.`);
+          } else {
+            return alert(`Code PIN incorrect pour ${user.name}.\nVeuillez saisir votre code PIN à 4 chiffres (ex: ${user.pin || '1234'}).`);
+          }
         }
+      }
+
+      if (targetFarmId) {
+        saveCurrentFarmData();
+        loadFarmData(targetFarmId);
+      }
+
+      state.currentUser = user;
+      currentRole = user.role || 'operator';
+      if (user.role === 'delivery') {
+        currentTab = 'delivery';
+      } else {
+        currentTab = 'dashboard';
       }
 
       if (rememberCheckbox && !rememberCheckbox.checked) {
@@ -8063,7 +8156,9 @@
         localStorage.setItem('mycotrack_saved_user_id', user.id);
       }
 
-      loginDirectUser(user.id);
+      saveState();
+      setRole(user.role || 'operator');
+      showToast(`Bienvenue ${user.name} (${user.title || (user.role === 'admin' ? 'Administrateur' : 'Opérateur')}) !`);
     }
 
     function logoutUser() {
@@ -8170,7 +8265,7 @@
         pin: pin,
         farmId: targetFarm.id,
         status: 'active',
-        title: roleReq === 'delivery' ? 'Livreur Express' : 'Technicien de Culture'
+        title: roleReq === 'delivery' ? 'Livreur Express' : 'Opérateur'
       };
 
       if (!state.users) state.users = [];
@@ -8248,7 +8343,7 @@
       const origBtnHtml = createBtn ? createBtn.innerHTML : '';
       if (createBtn) {
         createBtn.disabled = true;
-        createBtn.innerHTML = '<span>⏳</span> <span>Publication de la ferme sur Google Cloud...</span>';
+        createBtn.innerHTML = '<span>⏳</span> <span>Création de votre ferme en cours...</span>';
       }
 
       const codeSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -8318,10 +8413,17 @@
         expenses: []
       };
 
-      // Basculer sur la nouvelle ferme
+      // 1. Basculer immédiatement sur la nouvelle ferme (AUCUN BLOCAGE)
       switchActiveFarm(farmId, ownerUser);
 
-      // Publication immédiate sur Google Cloud Firestore (Ferme + tous les alias du code d'invitation)
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.innerHTML = origBtnHtml;
+      }
+
+      showToast(`Ferme "${farmName}" créée avec succès ! Code : ${cleanUpper}`);
+
+      // 2. Publication Cloud Firestore en arrière-plan (Optimistic UI)
       const farmPayload = {
         ...state.farmsData[farmId],
         inviteCode: cleanUpper,
@@ -8336,36 +8438,51 @@
         createdAt: new Date().toISOString()
       };
 
-      try {
-        await Promise.allSettled([
-          cloudSaveDoc('farms', farmId, farmPayload),
-          cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
-          cloudSaveDoc('invite_codes', cleanLower, invitePayload),
-          cloudSaveDoc('invite_codes', cleanAlpha, invitePayload)
-        ]);
-        console.log('☁️ Ferme et alias de code d\'invitation publiés sur Firestore :', cleanUpper);
-      } catch (cloudErr) {
-        console.warn('Erreur publication Cloud Firestore:', cloudErr);
-      }
-
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.innerHTML = origBtnHtml;
-      }
-
-      showToast(`Ferme "${farmName}" créée avec succès ! Code d'invitation : ${cleanUpper}`);
+      (async () => {
+        try {
+          await Promise.allSettled([
+            cloudSaveDoc('farms', farmId, farmPayload),
+            cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
+            cloudSaveDoc('invite_codes', cleanLower, invitePayload),
+            cloudSaveDoc('invite_codes', cleanAlpha, invitePayload),
+            saveUserCredentialsToCloud(ownerUser)
+          ]);
+          console.log('☁️ Ferme, alias et identifiants publiés sur Firestore :', cleanUpper);
+          showToast(`☁️ Ferme "${farmName}" synchronisée sur Google Cloud !`);
+        } catch (cloudErr) {
+          console.warn('Note publication Cloud Firestore:', cloudErr);
+        }
+      })();
     }
 
-    function approveUserRole(userId, role) {
+        function approveUserRole(userId, newRole) {
       const user = (state.users || []).find(u => u.id === userId);
-      if (user) {
-        user.role = role;
-        user.status = 'active';
-        user.title = role === 'culture' ? 'Responsable Culture' : (role === 'delivery' ? 'Livreur' : 'Administrateur');
-        saveState();
-        showToast(`Rôle ${role.toUpperCase()} attribué à ${user.name} !`);
-        renderCarnetView();
+      if (!user) return;
+
+      // Protection : au moins un administrateur doit rester actif
+      if (user.role === 'admin' && newRole !== 'admin') {
+        const remainingAdmins = (state.users || []).filter(u => u.id !== userId && u.role === 'admin');
+        if (remainingAdmins.length === 0) {
+          return alert("Action impossible : L'exploitation doit obligatoirement conserver au moins un Administrateur.");
+        }
       }
+
+      user.role = newRole;
+      user.status = 'active';
+      if (newRole === 'admin') {
+        user.title = 'Co-Gérant (Administrateur)';
+        user.password = user.password || 'password123';
+      } else if (newRole === 'operator' || newRole === 'culture') {
+        user.title = 'Opérateur de Culture';
+      } else if (newRole === 'delivery') {
+        user.title = 'Livreur Express';
+      }
+
+      saveState();
+      saveUserCredentialsToCloud(user);
+
+      showToast(`Rôle ${newRole === 'admin' ? 'ADMINISTRATEUR (CO-GÉRANT)' : (newRole === 'delivery' ? 'LIVREUR' : 'OPÉRATEUR')} attribué à ${user.name} !`);
+      renderCarnetView();
     }
 
     function rejectUserRequest(userId) {
