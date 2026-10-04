@@ -7831,179 +7831,149 @@ async function cloudGetDoc(collection, docId) {
       const bottomNav = document.getElementById('bottom-nav');
       if (bottomNav) bottomNav.classList.add('hidden');
 
-      const registeredFarms = state.farms || [];
-      const hasFarms = registeredFarms.length > 0;
-      
-      // Le portail démarre toujours sur l'onglet Connexion
-
       let formHtml = '';
 
       if (authTab === 'create') {
-        // Formulaire Déploiement d'une Nouvelle Ferme (Patron)
+        // FORMULAIRE CRÉATION EXPLOITATION (GÉRANT)
         formHtml = `
-          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
-            <div class="border-b border-[#2d4a2d] pb-2">
-              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <div class="bg-[#142214] p-5 rounded-3xl border border-[#2d4a2d] space-y-4 shadow-2xl">
+            <div class="border-b border-[#2d4a2d] pb-3">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
                 <span>🏢</span> <span>Créer une Nouvelle Exploitation (Gérant)</span>
               </h3>
-              <p class="text-[11px] text-[#888] mt-0.5">Déployez votre espace cloud sécurisé. Vous serez l'administrateur principal.</p>
+              <p class="text-[11px] text-[#888] mt-1">Déployez votre espace cloud sécurisé. Vous serez l'administrateur principal de la ferme.</p>
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom de l'Exploitation / Ferme *</label>
-              <input id="portal-create-farm-name" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white text-xs font-bold focus:outline-none" placeholder="ex: Champignons Bio des Aurès" value="">
+              <input id="portal-create-farm-name" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-3 text-white text-xs font-bold focus:outline-none" placeholder="ex: Champignons Bio des Aurès" value="">
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2.5">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Nom & Prénom Gérant *</label>
-                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Karim Belkacem" value="">
+                <input id="portal-create-owner-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Mourad Kebichi" value="">
               </div>
               <div>
-                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile Gérant</label>
-                <input id="portal-create-owner-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550123456" value="">
+                <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile Gérant *</label>
+                <input id="portal-create-owner-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0550367492" value="">
               </div>
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Email Gérant *</label>
-              <input id="portal-create-owner-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: contact@ma-ferme.dz" value="">
+              <input id="portal-create-owner-email" type="email" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: mkebichi@gmail.com" value="">
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Mot de passe Administrateur *</label>
-              <input id="portal-create-owner-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="••••••••" value="">
+              <input id="portal-create-owner-password" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="••••••••" value="">
             </div>
 
-            <button onclick="submitCreateFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
-              <span>👑</span> <span>Créer ma Ferme & Accéder à l'Espace</span>
+            <button onclick="submitCreateFarmFromPortal()" class="w-full py-3.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all cursor-pointer">
+              <span>👑</span> <span>Créer mon Exploitation & Accéder</span>
             </button>
 
-            ${hasFarms ? `
-              <button onclick="setAuthTab('login')" class="w-full py-2 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold">
-                Retour à la connexion
-              </button>
-            ` : ''}
+            <button onclick="setAuthTab('login')" class="w-full py-2.5 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer">
+              « Déjà un compte ? Retour à la connexion
+            </button>
           </div>
         `;
       } else if (authTab === 'join') {
-        // Formulaire Inscription Employé avec Code d'Invitation
+        // FORMULAIRE REJOINDRE AVEC CODE D'INVITATION (EMPLOYÉ)
         formHtml = `
-          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
-            <div class="border-b border-[#2d4a2d] pb-2">
-              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>🤝</span> <span>Rejoindre une Ferme Existante</span>
+          <div class="bg-[#142214] p-5 rounded-3xl border border-[#2d4a2d] space-y-4 shadow-2xl">
+            <div class="border-b border-[#2d4a2d] pb-3">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>🤝</span> <span>Rejoindre une Exploitation Existante</span>
               </h3>
-              <p class="text-[11px] text-[#888] mt-0.5">Saisissez le code d'invitation fourni par votre gérant.</p>
+              <p class="text-[11px] text-[#888] mt-1">Saisissez le code d'invitation fourni par votre gérant pour créer votre accès employé.</p>
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Code d'Invitation de la Ferme *</label>
-              <input id="portal-join-code" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-white font-mono text-center font-bold tracking-widest uppercase text-sm focus:outline-none" placeholder="ex: MYCO-KARI-1234">
+              <input id="portal-join-code" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-3 text-white font-mono text-center font-bold tracking-widest uppercase text-sm focus:outline-none" placeholder="ex: MYCO-KEBI-8024">
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Votre Nom & Prénom *</label>
-              <input id="portal-join-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Khaled Meziani">
+              <input id="portal-join-name" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs focus:border-[#7bc67e] focus:outline-none" placeholder="ex: Khaled Meziani">
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2.5">
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Téléphone mobile *</label>
-                <input id="portal-join-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0661223344">
+                <input id="portal-join-phone" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="ex: 0661223344">
               </div>
               <div>
                 <label class="text-[#aaa] text-xs block mb-1 font-semibold">Code PIN (4 chiffres) *</label>
-                <input id="portal-join-pin" type="text" maxlength="4" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-2.5 text-[#7bc67e] font-mono text-center font-bold tracking-widest text-sm focus:outline-none" placeholder="1234" value="1234">
+                <input id="portal-join-pin" type="text" maxlength="4" class="w-full bg-[#0a120a] border border-[#7bc67e] rounded-xl p-3 text-[#7bc67e] font-mono text-center font-bold tracking-widest text-sm focus:outline-none" placeholder="1234" value="1234">
               </div>
             </div>
 
             <div>
               <label class="text-[#aaa] text-xs block mb-1 font-semibold">Rôle attribué par le gérant *</label>
-              <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-2.5 text-white text-xs focus:border-[#7bc67e] focus:outline-none">
+              <select id="portal-join-role-requested" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs focus:border-[#7bc67e] focus:outline-none">
                 <option value="culture">🍄 Opérateur (Gestion des sacs, récoltes & expéditions - Zéro finances)</option>
                 <option value="delivery">🛵 Livreur Express (Accès courses & livraisons)</option>
               </select>
             </div>
 
-            <button onclick="submitJoinFarmFromPortal()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
-              <span>🚀</span> <span>Rejoindre la Ferme & Commencer</span>
+            <button onclick="submitJoinFarmFromPortal()" class="w-full py-3.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all cursor-pointer">
+              <span>🚀</span> <span>Rejoindre l'Équipe & Commencer</span>
             </button>
 
-            <button onclick="setAuthTab('login')" class="w-full py-2 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold">
-              Retour à la connexion
+            <button onclick="setAuthTab('login')" class="w-full py-2.5 bg-[#1a2a1a] hover:bg-[#263d26] text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer">
+              « Déjà membre ? Retour à la connexion
             </button>
           </div>
         `;
       } else {
-        // Page Unique de Connexion Simple
+        // FORMULAIRE DE CONNEXION PRINCIPAL (SAAS STANDARD SÉCURISÉ)
         formHtml = `
           <div class="space-y-4">
-            <!-- Détection automatique en direct des fermes sur Google Cloud -->
-            <div id="cloud-detected-farms-box" class="bg-[#142214] p-3.5 rounded-2xl border border-[#4a9e4e]/50 space-y-2.5 shadow-lg">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>☁️</span> <span>Exploitations Détectées sur Google Cloud :</span>
-                </span>
-                <span class="text-[10px] bg-[#1f3a1f] text-[#7bc67e] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#7bc67e] animate-ping"></span>
-                  En direct
-                </span>
-              </div>
-              <div id="cloud-farms-list" class="space-y-1.5">
-                <div class="text-[11px] text-[#888] p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d] text-center flex items-center justify-center gap-2">
-                  <span>⏳</span> <span>Recherche de vos exploitations sur Google Cloud...</span>
-                </div>
-              </div>
-            </div>
-            <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] space-y-3.5 shadow-lg">
+            <div class="bg-[#142214] p-5 rounded-3xl border border-[#2d4a2d] space-y-4 shadow-2xl">
               <div>
-                <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
-                  <span>📱 Téléphone, 📧 Email OU 🏢 Code Ferme (MYCO-...)</span>
+                <label class="text-[#aaa] text-xs block mb-1.5 font-semibold flex items-center justify-between">
+                  <span>📱 Numéro de téléphone OU 📧 Email</span>
                   <span class="text-[10px] text-[#7bc67e] font-normal">Algérie (+213)</span>
                 </label>
-                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none" placeholder="ex: MYCO-KEBI-8024, 0550367492 ou email" value="">
+                <input id="auth-login-identifier" type="text" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-2xl p-3.5 text-white text-xs font-semibold focus:border-[#7bc67e] focus:outline-none transition-colors" placeholder="ex: 0550367492 ou mkebichi@gmail.com" value="">
               </div>
 
               <div>
-                <label class="text-[#aaa] text-xs block mb-1 font-semibold flex items-center justify-between">
-                  <span>🔒 Mot de passe (Gérant) ou PIN 4 chiffres (Équipe)</span>
-                  <span class="text-[10px] text-[#888]">Opérateur & Livreur : 4 chiffres</span>
+                <label class="text-[#aaa] text-xs block mb-1.5 font-semibold flex items-center justify-between">
+                  <span>🔒 Mot de passe (Gérant) ou Code PIN 4 chiffres (Équipe)</span>
+                  <span class="text-[10px] text-[#888]">Opérateur & Livreur : PIN 4 chiffres</span>
                 </label>
-                <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-xl p-3 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none" placeholder="Mot de passe ou 4 chiffres (ex: 1234)" value="">
+                <input id="auth-login-secret" type="password" class="w-full bg-[#0a120a] border border-[#2d4a2d] rounded-2xl p-3.5 text-white text-xs font-mono focus:border-[#7bc67e] focus:outline-none transition-colors" placeholder="••••••••" value="">
               </div>
               
               <div class="flex items-center justify-between text-[11px] pt-1 text-[#888]">
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="auth-remember-me" checked class="accent-[#4a9e4e] rounded">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="auth-remember-me" checked class="accent-[#4a9e4e] w-4 h-4 rounded cursor-pointer">
                   <span class="text-slate-300 font-medium">Rester connecté sur cet appareil</span>
                 </label>
               </div>
 
-              <button onclick="loginWithFormCredentials()" class="w-full py-3 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all">
-                <span>🔑</span> <span>Se Connecter à la Ferme</span>
+              <button onclick="loginWithFormCredentials()" class="w-full py-3.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs shadow-lg shadow-[#4a9e4e]/20 flex items-center justify-center gap-2 transition-all cursor-pointer">
+                <span>🔑</span> <span>Se Connecter</span>
               </button>
             </div>
 
-            <!-- Liste des fermes enregistrées sur cet appareil si existantes -->
-            ${registeredFarms.length > 0 ? `
-              <div class="bg-[#142214] p-3 rounded-2xl border border-[#2d4a2d] space-y-2 text-xs">
-                <span class="text-[11px] font-bold text-[#aaa] block">Exploitations disponibles sur cet appareil :</span>
-                <div class="space-y-1.5">
-                  ${registeredFarms.map(f => `
-                    <div class="flex items-center justify-between p-2 rounded-xl bg-[#0a120a] border border-[#2d4a2d]">
-                      <div>
-                        <strong class="text-white block text-xs">${f.name}</strong>
-                        <span class="text-[10px] text-[#7bc67e] font-mono">Code: ${f.inviteCode}</span>
-                      </div>
-                      <button onclick="switchActiveFarm('${f.id}')" class="px-2.5 py-1 bg-[#1f3a1f] text-[#7bc67e] hover:bg-[#2e542e] rounded-lg font-bold text-[10px]">
-                        Sélectionner
-                      </button>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            ` : ''}
+            <!-- Liens d'accès rapides Création & Rejoindre -->
+            <div class="grid grid-cols-2 gap-2 text-center text-xs">
+              <button onclick="setAuthTab('create')" class="p-3 rounded-2xl bg-[#142214]/80 hover:bg-[#1a2e1a] border border-[#2d4a2d] text-slate-300 font-semibold transition-all flex flex-col items-center gap-1 group cursor-pointer">
+                <span class="text-sm group-hover:scale-110 transition-transform">🏢</span>
+                <span class="text-[11px] text-[#7bc67e] font-bold">Créer une Ferme</span>
+                <span class="text-[9px] text-[#888]">Pour les gérants</span>
+              </button>
+              <button onclick="setAuthTab('join')" class="p-3 rounded-2xl bg-[#142214]/80 hover:bg-[#1a2e1a] border border-[#2d4a2d] text-slate-300 font-semibold transition-all flex flex-col items-center gap-1 group cursor-pointer">
+                <span class="text-sm group-hover:scale-110 transition-transform">🤝</span>
+                <span class="text-[11px] text-[#7bc67e] font-bold">Rejoindre Équipe</span>
+                <span class="text-[9px] text-[#888]">Avec code d'invitation</span>
+              </button>
+            </div>
           </div>
         `;
       }
@@ -8012,25 +7982,25 @@ async function cloudGetDoc(collection, docId) {
         <div class="max-w-md mx-auto space-y-4 pb-8 select-none">
           <!-- Logo & En-tête -->
           <div class="text-center pt-3 pb-1 space-y-1.5">
-            <div class="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-[#142214] border-2 border-[#7bc67e] shadow-md shadow-[#4a9e4e]/20 text-2xl">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#142214] border-2 border-[#7bc67e] shadow-md shadow-[#4a9e4e]/20 text-2xl">
               🍄
             </div>
             <div>
               <h1 class="text-base font-extrabold text-white tracking-wide">MycoTrack Pro</h1>
-              <p class="text-[11px] text-[#7bc67e] font-semibold">${state.farm ? state.farm.name : 'Gestion Mycologique SaaS'}</p>
-              <p class="text-[10px] text-[#888]">Portail d'identification sécurisé • Mode Cloud & Hors-ligne</p>
+              <p class="text-[11px] text-[#7bc67e] font-semibold">${state.farm ? state.farm.name : 'Gestion & Traçabilité Mycologique'}</p>
+              <p class="text-[10px] text-[#888]">Portail d'authentification sécurisé • Cloud & Multi-postes</p>
             </div>
           </div>
 
-          <!-- Onglets de sélection rapides -->
+          <!-- Onglets de navigation -->
           <div class="flex bg-[#142214] p-1 rounded-2xl border border-[#2d4a2d] text-xs">
-            <button onclick="setAuthTab('login')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'login' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+            <button onclick="setAuthTab('login')" class="flex-1 py-2.5 rounded-xl font-bold transition-all text-center ${authTab === 'login' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'} cursor-pointer">
               🔑 Connexion
             </button>
-            <button onclick="setAuthTab('create')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'create' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
-              🏢 Créer Ferme
+            <button onclick="setAuthTab('create')" class="flex-1 py-2.5 rounded-xl font-bold transition-all text-center ${authTab === 'create' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'} cursor-pointer">
+              🏢 Créer Exploitation
             </button>
-            <button onclick="setAuthTab('join')" class="flex-1 py-2 rounded-xl font-bold transition-all text-center ${authTab === 'join' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'}">
+            <button onclick="setAuthTab('join')" class="flex-1 py-2.5 rounded-xl font-bold transition-all text-center ${authTab === 'join' ? 'bg-[#4a9e4e] text-white shadow' : 'text-[#888] hover:text-white'} cursor-pointer">
               🤝 Rejoindre
             </button>
           </div>
@@ -8074,144 +8044,8 @@ async function cloudGetDoc(collection, docId) {
               </p>
             </div>
           </div>
-</div>
-      `;
-
-      // Chargement asynchrone des fermes Cloud après insertion DOM
-      setTimeout(() => {
-        cloudListFarms().then(farms => {
-          const listEl = document.getElementById('cloud-farms-list');
-          if (!listEl) return;
-          if (!farms || farms.length === 0) {
-            listEl.innerHTML = '<p class="text-[11px] text-[#888] text-center p-2 bg-[#0a120a] rounded-xl border border-[#2d4a2d]">Aucune exploitation sur le Cloud. Saisissez votre identifiant ci-dessous ou créez votre ferme.</p>';
-            return;
-          }
-          listEl.innerHTML = farms.map(f => `
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0a120a] border border-[#2d4a2d] hover:border-[#7bc67e] transition-all group">
-              <div class="text-left">
-                <strong class="text-white text-xs block group-hover:text-[#7bc67e] transition-colors">${f.name}</strong>
-                <span class="text-[10px] text-[#7bc67e] font-mono font-bold">Code : ${f.inviteCode || f.id}</span>
-              </div>
-              <button onclick="quickConnectToCloudFarm('${f.id}', '${f.inviteCode}')" class="px-3 py-1.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow shadow-[#4a9e4e]/20 flex items-center gap-1.5 transition-all">
-                <span>Ouvrir</span> <span>➔</span>
-              </button>
-            </div>
-          `).join('');
-        }).catch(err => {
-          const listEl = document.getElementById('cloud-farms-list');
-          if (listEl) listEl.innerHTML = '<p class="text-[10px] text-[#888] text-center p-2">Exploitations Cloud prêtes. Saisissez vos identifiants ci-dessous.</p>';
-        });
-      }, 50);
-    }
-
-    function renderPendingApprovalPage() {
-      const container = document.getElementById('app-content');
-      if (!container) return;
-
-      const u = state.currentUser;
-      const f = state.farm || { name: 'Ferme Moura Pleurotes' };
-
-      const bottomNav = document.getElementById('bottom-nav');
-      if (bottomNav) bottomNav.classList.add('hidden');
-      const subheader = document.getElementById('active-role-subheader');
-      if (subheader) subheader.classList.add('hidden');
-
-      container.innerHTML = `
-        <div class="max-w-md mx-auto space-y-4 pt-6 pb-8 text-center select-none">
-          <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-950/40 border border-amber-500/60 shadow text-2xl">
-            ⏳
-          </div>
-          <div>
-            <h2 class="text-base font-bold text-white">Adhésion en Attente de Validation</h2>
-            <p class="text-xs text-amber-400 font-semibold mt-1">Bonjour ${u.name}, votre demande a bien été reçue !</p>
-          </div>
-
-          <div class="bg-[#142214] p-4 rounded-2xl border border-[#2d4a2d] text-left text-xs space-y-2.5">
-            <div class="flex items-center gap-2">
-              <span class="text-base">🏢</span>
-              <div>
-                <span class="text-[10px] text-[#888] block">Ferme ciblée</span>
-                <span class="font-bold text-white">${f.name}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-base">📧</span>
-              <div>
-                <span class="text-[10px] text-[#888] block">Votre Email</span>
-                <span class="font-semibold text-slate-300">${u.email}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-base">🛡️</span>
-              <div>
-                <span class="text-[10px] text-[#888] block">Statut de sécurité</span>
-                <span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded-full text-[10px]">Validation Admin Requise</span>
-              </div>
-            </div>
-            
-            <p class="text-[11px] text-[#aaa] pt-2 border-t border-[#2d4a2d] leading-relaxed">
-              Pour des raisons de traçabilité et de sécurité des cultures et des finances, le gérant de la ferme doit valider votre profil dans <strong>Carnet Pro ➔ Équipe & Rôles</strong> avant de débloquer vos accès.
-            </p>
-          </div>
-
-          <div class="space-y-2 pt-2">
-            <button onclick="checkPendingApprovalStatus()" class="w-full py-2.5 bg-[#4a9e4e] hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow flex items-center justify-center gap-1.5">
-              <span>🔄</span> <span>Actualiser mon Statut</span>
-            </button>
-            <button onclick="logoutUser()" class="w-full py-2.5 bg-[#1a2a1a] hover:bg-red-950/60 border border-[#2d4a2d] text-red-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5">
-              <span>🚪</span> <span>Se déconnecter (Changer de compte)</span>
-            </button>
-          </div>
         </div>
       `;
-    }
-
-    function checkPendingApprovalStatus() {
-      if (!state.currentUser) return;
-      const refreshed = (state.users || []).find(u => u.id === state.currentUser.id);
-      if (refreshed) {
-        state.currentUser = refreshed;
-        saveState();
-        if (refreshed.status === 'active') {
-          showToast(`Félicitations ${refreshed.name} ! Votre rôle ${refreshed.role.toUpperCase()} a été validé.`);
-          setRole(refreshed.role || 'culture');
-        } else {
-          showToast('Votre demande est toujours en cours d\'examen par l\'administrateur.');
-        }
-      }
-    }
-
-    function loginDirectUser(userId) {
-      let user = (state.users || []).find(u => u.id === userId);
-      if (!user && state.farmsData) {
-        for (const fId of Object.keys(state.farmsData)) {
-          const u = (state.farmsData[fId].users || []).find(x => x.id === userId);
-          if (u) {
-            switchActiveFarm(fId, u);
-            return;
-          }
-        }
-      }
-      // No mock fallback
-      if (!user) return;
-      state.currentUser = user;
-      currentRole = user.role || 'culture';
-      if ((u.role === 'operator' || u.role === 'culture')) {
-        currentTab = 'dashboard';
-      } else if (user.role === 'delivery') {
-        currentTab = 'delivery';
-      } else {
-        currentTab = 'dashboard';
-      }
-      localStorage.setItem('mycotrack_session_active', 'true');
-      localStorage.setItem('mycotrack_saved_user_id', user.id);
-      saveState();
-      if (user.status === 'pending') {
-        renderPendingApprovalPage();
-      } else {
-        setRole(user.role || 'culture');
-        showToast(`Connecté en tant que ${user.name} (${user.title || user.role}).`);
-      }
     }
 
     async function loginWithFormCredentials() {
@@ -8222,7 +8056,12 @@ async function cloudGetDoc(collection, docId) {
       const rawIdent = (identInput?.value || '').trim();
       const rawSecret = (secretInput?.value || '').trim();
 
-      if (!rawIdent) return alert('Veuillez saisir votre identifiant (Téléphone, Email ou Code Ferme).');
+      if (!rawIdent) {
+        return alert("Veuillez saisir votre identifiant (Numéro de téléphone mobile ou Adresse email).");
+      }
+      if (!rawSecret) {
+        return alert("Veuillez saisir votre mot de passe (Gérant) ou votre code PIN à 4 chiffres (Opérateur / Livreur).");
+      }
 
       const isEmail = rawIdent.includes('@');
       const lowerEmail = rawIdent.toLowerCase();
@@ -8252,35 +8091,8 @@ async function cloudGetDoc(collection, docId) {
       let user = null;
       let targetFarmId = state.farm ? state.farm.id : null;
 
-      // 0. Si un code d'invitation est saisi directement (ex: MYCO-KEBI-8024)
-      const isPossibleCode = rawIdent.toUpperCase().startsWith('MYCO-') || (!isEmail && cleanDigits.length === 4 && rawIdent.length <= 15);
-      if (isPossibleCode) {
-        try {
-          const inviteMeta = await cloudGetInviteCode(rawIdent);
-          if (inviteMeta && inviteMeta.farmId) {
-            let fPayload = await cloudGetDoc('farms', inviteMeta.farmId);
-            if (fPayload) {
-              fPayload = unpackFirestoreDoc(fPayload);
-              targetFarmId = inviteMeta.farmId;
-              if (!state.farmsData) state.farmsData = {};
-              state.farmsData[targetFarmId] = fPayload;
-              if (!state.farms) state.farms = [];
-              const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: inviteMeta.farmName || fPayload.name || 'Ferme Pleurotes', inviteCode: inviteMeta.inviteCode || rawIdent };
-              if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
-
-              const usersList = ensureArray(fPayload.users);
-              user = (rawSecret ? usersList.find(u => u.password === rawSecret || u.pin === rawSecret) : null) || usersList.find(u => u.role === 'admin') || usersList[0];
-            }
-          }
-        } catch (codeErr) {
-          console.warn('Invite code login note:', codeErr);
-        }
-      }
-
       // 1. Recherche dans la mémoire locale de cet appareil
-      if (!user) {
-        user = ensureArray(state.users).find(matchUser);
-      }
+      user = ensureArray(state.users).find(matchUser);
 
       if (!user && state.farmsData) {
         for (const fId of Object.keys(state.farmsData)) {
@@ -8293,7 +8105,7 @@ async function cloudGetDoc(collection, docId) {
         }
       }
 
-      // 2. Si introuvable en local : Recherche sur Google Cloud Firestore (Connexion universelle multi-appareils)
+      // 2. Recherche sur Google Cloud Firestore (/user_credentials/{ident})
       if (!user) {
         try {
           const credLookupKey = isEmail ? lowerEmail : cleanDigits;
@@ -8321,26 +8133,30 @@ async function cloudGetDoc(collection, docId) {
         }
       }
 
-      // 3. Si introuvable : recherche par nom direct d'exploitation (ex: Z3atria ou Z3atriaTest)
-      if (!user && !isEmail && !isPossibleCode) {
+      // 3. Fallback scan sur toutes les fermes Firestore si non trouvé dans user_credentials
+      if (!user) {
         try {
           const allFarms = await cloudListFarms();
-          const matched = allFarms.find(f => f.name && f.name.toLowerCase() === rawIdent.toLowerCase());
-          if (matched) {
-            let fPayload = await cloudGetDoc('farms', matched.id);
+          for (const f of allFarms) {
+            let fPayload = await cloudGetDoc('farms', f.id);
             if (fPayload) {
               fPayload = unpackFirestoreDoc(fPayload);
-              targetFarmId = matched.id;
-              if (!state.farmsData) state.farmsData = {};
-              state.farmsData[targetFarmId] = fPayload;
-              if (!state.farms) state.farms = [];
-              const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: matched.name, inviteCode: matched.inviteCode };
-              if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
               const usersList = ensureArray(fPayload.users);
-              user = (rawSecret ? usersList.find(u => u.password === rawSecret || u.pin === rawSecret) : null) || usersList.find(u => u.role === 'admin') || usersList[0];
+              const matched = usersList.find(matchUser);
+              if (matched) {
+                targetFarmId = f.id;
+                user = matched;
+                if (!state.farmsData) state.farmsData = {};
+                state.farmsData[targetFarmId] = fPayload;
+                if (!state.farms) state.farms = [];
+                const farmObj = (typeof fPayload.farm === 'object' && fPayload.farm) ? fPayload.farm : { id: targetFarmId, name: f.name, inviteCode: f.inviteCode };
+                if (!state.farms.some(f => f.id === targetFarmId)) state.farms.push(farmObj);
+                saveUserCredentialsToCloud(matched);
+                break;
+              }
             }
           }
-        } catch (nameErr) {}
+        } catch (scanErr) {}
       }
 
       if (loginBtn) {
@@ -8349,23 +8165,20 @@ async function cloudGetDoc(collection, docId) {
       }
 
       if (!user) {
-        return alert("Identifiant introuvable.\nVérifiez votre email, numéro de téléphone, code d'invitation (MYCO-...) ou nom d'exploitation.");
+        return alert("Identifiant introuvable.\nAucun compte n'est associé à ce numéro de téléphone ou cet email.\n\n• Si vous êtes gérant : Cliquez sur 'Créer Exploitation'.\n• Si vous êtes employé : Cliquez sur 'Rejoindre' avec le code fourni par votre gérant.");
       }
 
-      // 4. Vérification du mot de passe ou code PIN
-      if (rawSecret) {
-        let isSecretValid = false;
-        if (user.role === 'admin') {
-          isSecretValid = (rawSecret === user.password || rawSecret === user.pin || rawSecret === 'password123');
-        } else {
-          isSecretValid = (rawSecret === user.pin || rawSecret === user.password || rawSecret === '1234' || rawSecret === '5678');
-        }
+      // 4. Vérification stricte du mot de passe ou code PIN
+      let isSecretValid = false;
+      if (user.role === 'admin') {
+        isSecretValid = (rawSecret === user.password || (user.pin && rawSecret === user.pin));
         if (!isSecretValid) {
-          if (user.role === 'admin') {
-            return alert(`Mot de passe incorrect pour le compte administrateur ${user.email || user.name}.`);
-          } else {
-            return alert(`Code PIN incorrect pour ${user.name}.\nVeuillez saisir votre code PIN à 4 chiffres (ex: ${user.pin || '1234'}).`);
-          }
+          return alert(`Mot de passe incorrect pour le compte administrateur ${user.email || user.name}.\nVeuillez vérifier votre mot de passe gérant.`);
+        }
+      } else {
+        isSecretValid = (rawSecret === user.pin || (user.password && rawSecret === user.password));
+        if (!isSecretValid) {
+          return alert(`Code PIN incorrect pour ${user.name}.\nVeuillez saisir votre code PIN personnel à 4 chiffres (ex: 1234).`);
         }
       }
 
@@ -8543,6 +8356,7 @@ async function cloudGetDoc(collection, docId) {
         });
         state.notifications = notifs;
 
+        await saveUserCredentialsToCloud(newUser);
         await cloudSaveDoc('farms', targetFarm.id, {
           users: state.users,
           deliverers: state.deliverers || [],
