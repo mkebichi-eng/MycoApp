@@ -684,7 +684,8 @@ async function cloudGetDoc(collection, docId) {
           currentRole = owner.role || 'admin';
           localStorage.setItem('mycotrack_session_active', 'true');
           localStorage.setItem('mycotrack_saved_user_id', owner.id);
-          saveState();
+          localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+          setupFirestoreListenerForActiveFarm(farmId);
           setRole(owner.role || 'admin');
           renderCurrentView();
           showToast('Exploitation ' + (state.farm ? state.farm.name : '') + ' chargée avec succès !');
@@ -764,7 +765,6 @@ async function cloudGetDoc(collection, docId) {
       }
       for (const f of farms) {
         if (!f || !f.id || !f.inviteCode) continue;
-        const farmPayload = (state.farmsData && state.farmsData[f.id]) ? state.farmsData[f.id] : { farm: f, users: state.users || [] };
         try {
           const cleanUpper = f.inviteCode.toUpperCase().replace(/\s+/g, '');
           const cleanLower = cleanUpper.toLowerCase();
@@ -778,24 +778,35 @@ async function cloudGetDoc(collection, docId) {
             createdAt: f.createdAt || new Date().toISOString()
           };
 
-          // Sauvegarde de la ferme et des alias pour recherche instantanée
-          await Promise.allSettled([
-            cloudSaveDoc('farms', f.id, {
+          // Vérifier d'abord si la ferme existe sur Google Cloud
+          const remoteDoc = await cloudGetDoc('farms', f.id);
+          if (remoteDoc) {
+            // La ferme existe déjà sur le Cloud : rafraîchir en local sans jamais écraser le Cloud avec du vieux cache
+            await pullLatestFarmDataFromCloud(f.id, true);
+          } else {
+            // Première publication Cloud uniquement si la ferme n'existe pas encore sur Firestore
+            const farmPayload = (state.farmsData && state.farmsData[f.id]) ? state.farmsData[f.id] : { farm: f, users: state.users || [] };
+            await cloudSaveDoc('farms', f.id, {
               ...farmPayload,
               inviteCode: cleanUpper,
               lastSyncedAt: new Date().toISOString()
-            }),
+            });
+          }
+
+          // Toujours sécuriser les codes d'invitation et les alias pour la recherche multi-appareils
+          await Promise.allSettled([
             cloudSaveDoc('invite_codes', cleanUpper, invitePayload),
             cloudSaveDoc('invite_codes', cleanLower, invitePayload),
             cloudSaveDoc('invite_codes', cleanAlpha, invitePayload)
           ]);
+
           // Indexer également les identifiants des membres de la ferme
-          if (farmPayload.users && Array.isArray(farmPayload.users)) {
-            for (const u of farmPayload.users) {
+          const currentUsers = (state.farmsData && state.farmsData[f.id] && state.farmsData[f.id].users) || state.users || [];
+          if (Array.isArray(currentUsers)) {
+            for (const u of currentUsers) {
               await saveUserCredentialsToCloud({ ...u, farmId: f.id });
             }
           }
-          console.log('☁️ Ferme, alias et identifiants synchronisés sur Firebase Cloud :', f.name, cleanUpper);
         } catch (e) {
           console.warn('Sync note pour ferme', f.id, e.message);
         }
@@ -823,6 +834,60 @@ async function cloudGetDoc(collection, docId) {
       }
     }
 
+    // Récupération infaillible des données les plus fraîches depuis Cloud Firestore
+    async function pullLatestFarmDataFromCloud(farmId, silent = false) {
+      if (!farmId) farmId = state.farm ? state.farm.id : null;
+      if (!farmId) return null;
+      try {
+        let remotePayload = await cloudGetDoc('farms', farmId);
+        if (remotePayload) {
+          remotePayload = unpackFirestoreDoc(remotePayload);
+          if (!state.farmsData) state.farmsData = {};
+
+          state.farmsData[farmId] = {
+            ...state.farmsData[farmId],
+            ...remotePayload
+          };
+
+          if (!state.farms) state.farms = [];
+          const farmMeta = (typeof remotePayload.farm === 'object' && remotePayload.farm) ? 
+            remotePayload.farm : { id: farmId, name: remotePayload.name || 'Ferme Pleurotes', inviteCode: remotePayload.inviteCode };
+          const existingIdx = state.farms.findIndex(f => f.id === farmId);
+          if (existingIdx >= 0) {
+            state.farms[existingIdx] = { ...state.farms[existingIdx], ...farmMeta };
+          } else {
+            state.farms.push(farmMeta);
+          }
+
+          if (state.farm && state.farm.id === farmId) {
+            loadFarmData(farmId);
+            localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+            renderCurrentView();
+          }
+
+          if (state.currentUser) {
+            const updatedUser = ensureArray(state.users).find(u => 
+              u.id === state.currentUser.id || 
+              (u.email && state.currentUser.email && u.email.toLowerCase() === state.currentUser.email.toLowerCase()) ||
+              (u.phone && state.currentUser.phone && u.phone.replace(/\D/g, '') === state.currentUser.phone.replace(/\D/g, ''))
+            );
+            if (updatedUser) {
+              state.currentUser = { ...state.currentUser, ...updatedUser };
+              currentRole = updatedUser.role || currentRole;
+            }
+          }
+
+          if (!silent) {
+            console.log('🔄 Données de la ferme synchronisées depuis Google Cloud :', farmId);
+          }
+          return remotePayload;
+        }
+      } catch (err) {
+        if (!silent) console.warn('Erreur pullLatestFarmDataFromCloud:', err);
+      }
+      return null;
+    }
+
     async function syncCurrentFarmToFirestore() {
       if (!state.farm || !state.farm.id) return;
       try {
@@ -835,26 +900,32 @@ async function cloudGetDoc(collection, docId) {
           ...payload,
           lastSyncedAt: new Date().toISOString()
         });
+        if (payload.users && Array.isArray(payload.users)) {
+          for (const u of payload.users) {
+            saveUserCredentialsToCloud({ ...u, farmId });
+          }
+        }
         updateCloudStatusIndicator(true);
       } catch (err) {
         console.warn('Firestore sync note:', err.message);
       } finally {
-        setTimeout(() => { isSyncingToFirestore = false; }, 600);
+        setTimeout(() => { isSyncingToFirestore = false; }, 800);
       }
     }
 
     function setupFirestoreListenerForActiveFarm(farmId) {
       if (!firestoreDb || !farmId) return;
       if (currentFarmSnapshotUnsubscribe) {
-        currentFarmSnapshotUnsubscribe();
+        try { currentFarmSnapshotUnsubscribe(); } catch(e) {}
         currentFarmSnapshotUnsubscribe = null;
       }
       try {
         currentFarmSnapshotUnsubscribe = firestoreDb.collection('farms').doc(farmId)
           .onSnapshot(doc => {
             if (isSyncingToFirestore) return;
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
             if (doc.exists) {
-              const remoteData = doc.data();
+              const remoteData = unpackFirestoreDoc(doc.data());
               if (remoteData && state.farm && state.farm.id === farmId) {
                 state.farmsData[farmId] = {
                   ...state.farmsData[farmId],
@@ -862,7 +933,19 @@ async function cloudGetDoc(collection, docId) {
                 };
                 loadFarmData(farmId);
                 localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+                if (state.currentUser) {
+                  const updatedUser = ensureArray(state.users).find(u => 
+                    u.id === state.currentUser.id || 
+                    (u.email && state.currentUser.email && u.email.toLowerCase() === state.currentUser.email.toLowerCase()) ||
+                    (u.phone && state.currentUser.phone && u.phone.replace(/\D/g, '') === state.currentUser.phone.replace(/\D/g, ''))
+                  );
+                  if (updatedUser) {
+                    state.currentUser = { ...state.currentUser, ...updatedUser };
+                    currentRole = updatedUser.role || currentRole;
+                  }
+                }
                 renderCurrentView();
+                console.log('📡 Données de la ferme synchronisées en direct depuis Google Cloud !');
               }
             }
           }, err => {
@@ -880,8 +963,30 @@ async function cloudGetDoc(collection, docId) {
     window.addEventListener('online', () => {
       console.log('Connexion Internet active : synchronisation Cloud...');
       initFirebaseCloud();
-      syncAllLocalFarmsToCloud();
+      if (state.farm && state.farm.id) {
+        pullLatestFarmDataFromCloud(state.farm.id, false);
+        setupFirestoreListenerForActiveFarm(state.farm.id);
+      }
     });
+
+    // Synchronisation en direct au retour sur l'onglet ou au réveil du téléphone
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && state.farm && state.farm.id && state.currentUser) {
+        pullLatestFarmDataFromCloud(state.farm.id, true);
+      }
+    });
+    window.addEventListener('focus', () => {
+      if (state.farm && state.farm.id && state.currentUser) {
+        pullLatestFarmDataFromCloud(state.farm.id, true);
+      }
+    });
+
+    // Polling de synchronisation de secours toutes les 15 secondes
+    setInterval(() => {
+      if (state.farm && state.farm.id && state.currentUser && !isSyncingToFirestore) {
+        pullLatestFarmDataFromCloud(state.farm.id, true);
+      }
+    }, 15000);
 
     
     function saveCurrentFarmData() {
@@ -3619,6 +3724,7 @@ async function cloudGetDoc(collection, docId) {
       }
 
       saveState();
+      saveUserCredentialsToCloud(newUser);
       closeModal();
       showToast(`Employé ${name} ajouté ! Connexion avec Tél: ${phone} & PIN: ${pin}`);
       renderCarnetView();
@@ -8183,7 +8289,8 @@ async function cloudGetDoc(collection, docId) {
       }
 
       if (targetFarmId) {
-        saveCurrentFarmData();
+        // 1. Toujours synchroniser les données fraîches depuis Google Cloud avant d'afficher
+        await pullLatestFarmDataFromCloud(targetFarmId, false);
         loadFarmData(targetFarmId);
       }
 
@@ -8203,8 +8310,16 @@ async function cloudGetDoc(collection, docId) {
         localStorage.setItem('mycotrack_saved_user_id', user.id);
       }
 
-      saveState();
+      saveCurrentFarmData();
+      localStorage.setItem('mycotrack_prod_v1', JSON.stringify(state));
+
+      // 2. Activer l'écouteur temps réel Firestore pour cette ferme
+      if (targetFarmId) {
+        setupFirestoreListenerForActiveFarm(targetFarmId);
+      }
+
       setRole(user.role || 'operator');
+      checkBadges();
       renderCurrentView();
       showToast(`Bienvenue ${user.name} (${user.title || (user.role === 'admin' ? 'Administrateur' : 'Opérateur')}) !`);
     }
@@ -8343,6 +8458,9 @@ async function cloudGetDoc(collection, docId) {
       localStorage.setItem('mycotrack_session_active', 'true');
       localStorage.setItem('mycotrack_saved_user_id', newUser.id);
       saveState();
+      if (targetFarm && targetFarm.id) {
+        setupFirestoreListenerForActiveFarm(targetFarm.id);
+      }
 
       // Synchronisation immédiate du nouveau membre sur Firebase Cloud
       try {
@@ -8576,6 +8694,10 @@ async function cloudGetDoc(collection, docId) {
         renderPendingApprovalPage();
       } else {
         setRole(state.currentUser.role || 'admin');
+      }
+      if (state.farm && state.farm.id) {
+        pullLatestFarmDataFromCloud(state.farm.id, true);
+        setupFirestoreListenerForActiveFarm(state.farm.id);
       }
     }
   </script>
