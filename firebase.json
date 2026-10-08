@@ -17,7 +17,17 @@
     "redirects": [
       {
         "source": "/MycoTrackPro.apk",
-        "destination": "https://raw.githubusercontent.com/mkebichi-eng/MycoApp/main/MycoTrackPro.apk",
+        "destination": "https://github.com/mkebichi-eng/MycoApp/raw/main/MycoTrackPro.apk",
+        "type": 302
+      },
+      {
+        "source": "/apk",
+        "destination": "https://github.com/mkebichi-eng/MycoApp/raw/main/MycoTrackPro.apk",
+        "type": 302
+      },
+      {
+        "source": "/download",
+        "destination": "https://github.com/mkebichi-eng/MycoApp/raw/main/MycoTrackPro.apk",
         "type": 302
       }
     ],
